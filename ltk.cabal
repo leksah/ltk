@@ -1,0 +1,28 @@
+name: ltk
+version: 0.7
+cabal-version: -any
+build-type: Simple
+license: GPL
+license-file: "C:\\Dokumente und Einstellungen\\Juergen.Nicklisch-Fr\\Eigene Dateien\\Develop\\lws\\ltk\\LICENSE"
+copyright: Jürgen Nicklisch-Franken (jutaro)
+maintainer: maintainer@leksah.org
+build-depends: Cabal >=1.6.0, base >=4.0.0.0 && <5.0.0.0,
+               containers >=0.2, filepath >=1.1.0, glib >=0.10.0, gtk >=0.10.0,
+               mtl >=1.1.0.2
+homepage: http://www.leksah.org
+package-url: http://code.haskell.org/ltk
+bug-reports: http://code.google.com/p/leksah/issues/list
+synopsis: Leksah tool kit
+description: UI Framework used by leksah
+category: GUI
+author: Jürgen Nicklisch-Franken (jutaro)
+data-dir: ""
+exposed-modules: Default MyMissing Control.Event
+                 Graphics.UI.Editor.Basics Graphics.UI.Editor.Composite
+                 Graphics.UI.Editor.MakeEditor Graphics.UI.Editor.Parameters
+                 Graphics.UI.Editor.Simple Graphics.UI.Frame.Panes
+                 Graphics.UI.Frame.ViewFrame
+exposed: True
+buildable: True
+extensions: CPP
+hs-source-dirs: src
