@@ -3,7 +3,7 @@ version: 0.7
 cabal-version: -any
 build-type: Simple
 license: GPL
-license-file: "C:\\Dokumente und Einstellungen\\Juergen.Nicklisch-Fr\\Eigene Dateien\\Develop\\lws\\ltk\\LICENSE"
+license-file: "LICENSE"
 copyright: Jürgen Nicklisch-Franken (jutaro)
 maintainer: maintainer@leksah.org
 build-depends: Cabal >=1.6.0, base >=4.0.0.0 && <5.0.0.0,

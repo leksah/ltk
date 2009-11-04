@@ -112,8 +112,17 @@ import qualified Data.Set as  Set (unions, member)
 import Data.Set (Set(..))
 import Graphics.UI.Gtk.Gdk.Events (Event(..))
 
--- import Debug.Trace (trace)
-trace a b = b
+import Debug.Trace (trace)
+--trace a b = b
+instance Show Notebook
+    where show a =  "Notebook"
+
+groupPrefix = "_group_"
+
+withoutGroupPrefix :: String -> String
+withoutGroupPrefix s = case groupPrefix `stripPrefix` s of
+                            Nothing -> s
+                            Just s' -> s'
 
 initGtkRc :: IO ()
 initGtkRc = return ()
@@ -140,9 +149,14 @@ addPaneAdmin pane conn pp = do
     paneMap'        <-  getPaneMapSt
     unique          <-  liftIO newUnique
     liftIO $ widgetSetName (getTopWidget pane) (paneName pane)
-    trace ("addPaneAdmin name: " ++ paneName pane ++ " path: " ++ show pp) $
-        setPaneMapSt  (Map.insert (paneName pane) (pp, conn) paneMap')
-    setPanesSt          (Map.insert (paneName pane) (PaneC pane) panes')
+    case Map.lookup (paneName pane) paneMap' of
+        Nothing -> return ()
+        Just it -> error "ViewFrame>addPaneAdmin: pane with this name already exist"
+    case Map.lookup (paneName pane) panes' of
+        Nothing -> return ()
+        Just it -> error "ViewFrame>addPaneAdmin:pane with this name already exist2"
+    setPaneMapSt (Map.insert (paneName pane) (pp, conn) paneMap')
+    setPanesSt (Map.insert (paneName pane) (PaneC pane) panes')
 
 getPanePrim ::  RecoverablePane alpha beta delta => delta (Maybe alpha)
 getPanePrim = do
@@ -163,8 +177,9 @@ notebookInsertOrdered :: PaneMonad alpha => (NotebookClass self, WidgetClass chi
     -> child	-- child - the Widget to use as the contents of the page.
     -> String
     -> Maybe Label	-- the label for the page as String or Label
+    -> Bool
     -> alpha ()
-notebookInsertOrdered nb widget labelStr mbLabel = do
+notebookInsertOrdered nb widget labelStr mbLabel isGroup = do
     label	    <-  case mbLabel of
                         Nothing  -> liftIO $ labelNew (Just labelStr)
                         Just l  -> return l
@@ -174,11 +189,11 @@ notebookInsertOrdered nb widget labelStr mbLabel = do
                     -- trace ("numPages " ++ show numPages) $
 
     let widgets =   map (\v -> forceJust v "ViewFrame.notebookInsertOrdered: no widget") mbWidgets
-    labelStrs   <-  liftIO $ mapM (widgetGetName) widgets
-    let pos     =   case findIndex (\s -> s > labelStr) labelStrs of
+    labelStrs   <-  liftIO $ mapM widgetGetName widgets
+    let pos     =   case findIndex (\ s -> withoutGroupPrefix s > withoutGroupPrefix labelStr) labelStrs of
                         Just i  ->  i
                         Nothing ->  -1
-    labelBox    <-  mkLabelBox label labelStr
+    labelBox    <-  if isGroup then groupLabel labelStr else mkLabelBox label labelStr
     liftIO $ do
         markLabel nb labelBox False
         realPos     <-  notebookInsertPageMenu nb widget labelBox menuLabel pos
@@ -233,13 +248,22 @@ mkLabelBox lbl paneName = do
     return lb
     where
         closeHandler :: PaneMonad alpha => () -> alpha ()
-        closeHandler _ =    case "group_" `stripPrefix` paneName of
+        closeHandler _ =    case groupPrefix `stripPrefix` paneName of
                                 Just group  -> do
                                     closeGroup group
                                 Nothing -> do
                                     (PaneC pane) <- paneFromName paneName
                                     closePane pane
                                     return ()
+
+groupLabel :: PaneMonad beta => String -> beta EventBox
+groupLabel group = do
+    label <- liftIO $ labelNew Nothing
+    liftIO $ labelSetUseMarkup label True
+    liftIO $ labelSetMarkup label ("<b>" ++ group ++ "</b>")
+    labelBox <- mkLabelBox label (groupPrefix ++ group)
+    liftIO $ widgetShowAll labelBox
+    return labelBox
 
 -- | Add the change mark or removes it
 markLabel :: (WidgetClass alpha, NotebookClass beta) => beta -> alpha -> Bool -> IO ()
@@ -351,12 +375,13 @@ viewSplit dir = do
 
 viewSplit' :: PaneMonad alpha => PanePath -> Direction -> alpha ()
 viewSplit' panePath dir = do
-    l <- getLayout
+    l <- trace ("ViewFrame>>viewSplit' called " ++ show panePath ++ " " ++ show dir) getLayout
     case layoutFromPath panePath l of
         (TerminalP _ _ _ (Just _) _) -> trace ("ViewFrame>>viewSplit': can't split detached: ")
                                             return ()
         _                            -> do
             activeNotebook  <- getNotebook panePath
+            ind <- liftIO $ notebookGetCurrentPage activeNotebook
             mbPD <- do
                 mbParent  <- liftIO $ widgetGetParent activeNotebook
                 case mbParent of
@@ -417,17 +442,22 @@ viewSplit' panePath dir = do
                                     Just n -> do
                                         notebookSetCurrentPage (castToNotebook parent) n
                                         return ()
-                                    _      -> trace ("ViewFrame>>viewSplit': parent not a notebook: ")return ()
+                                    _      -> trace ("ViewFrame>>viewSplit': parent not a notebook2: ")return ()
                                 return (nb,paneDir)
                         handleFunc <-  runInIO (handleNotebookSwitch nb)
                         liftIO $ afterSwitchPage nb handleFunc
                         return (Just (paneDir,dir))
             case mbPD of
               Just (paneDir,pdir) -> do
-                  let toPane = panePath ++ [SplitP paneDir]
-                  adjustPanes panePath toPane
+                  adjustPanes panePath (panePath ++ [SplitP paneDir])
                   adjustLayoutForSplit paneDir panePath
-                  viewMove (otherDirection paneDir)
+                  mbWidget <- liftIO $ notebookGetNthPage activeNotebook ind
+                  when (isJust mbWidget) $ do
+                    name <- liftIO $ widgetGetName (fromJust mbWidget)
+                    mbPane  <- mbPaneFromName name
+                    case mbPane of
+                        Just (PaneC pane) -> move (panePath ++ [SplitP (otherDirection paneDir)]) pane
+                        Nothing -> return ()
               Nothing -> return ()
 
 viewNewGroup :: PaneMonad alpha => alpha ()
@@ -525,17 +555,10 @@ viewNest' panePath group = do
             case paneLayout of
                 (TerminalP {}) -> do
                     nb <- newNotebook (panePath ++ [GroupP group])
-                    liftIO $ do
-                        widgetSetName nb ("group_" ++ group)
-                        notebookAppendPage activeNotebook nb group
-                    label <- groupLabel group
-                    label2 <- groupMenuLabel group
-                    liftIO $ do
-                        notebookSetTabLabel activeNotebook nb label
-                        notebookSetMenuLabel activeNotebook nb label2
-                        widgetShowAll nb
-                        widgetGrabFocus activeNotebook
-                        return nb
+                    liftIO $ widgetSetName nb (groupPrefix ++ group)
+                    notebookInsertOrdered activeNotebook nb group Nothing True
+                    liftIO $ widgetShowAll nb
+                        --widgetGrabFocus activeNotebook
                     handleFunc <-  runInIO (handleNotebookSwitch nb)
                     liftIO $ afterSwitchPage nb handleFunc
                     adjustLayoutForNest group panePath
@@ -573,8 +596,10 @@ closeGroup groupName = do
                         Just parent -> liftIO $ containerRemove (castToContainer parent) nbOrPaned
                     setLayoutSt (removeGL path layout)
                     ppMap <- getPanePathFromNB
-                    setPanePathFromNB (Map.filter (\pa -> path `isPrefixOf` pa) ppMap)
-                    return ()
+                    trace ("closeGroup before: " ++ show ppMap) $
+                        setPanePathFromNB (Map.filter (\pa -> not (path `isPrefixOf` pa)) ppMap)
+                    ppMap <- getPanePathFromNB
+                    trace ("closeGroup after: " ++ show ppMap) $return ()
 
 viewDetach :: PaneMonad alpha => alpha (Maybe (Window,Widget))
 viewDetach = do
@@ -644,14 +669,7 @@ handleReattach windowId window _ = do
                 otherwise       -> return ()
             return False -- "now destroy the window"
 
-groupLabel :: PaneMonad beta => String -> beta EventBox
-groupLabel group = do
-    label <- liftIO $ labelNew Nothing
-    liftIO $ labelSetUseMarkup label True
-    liftIO $ labelSetMarkup label ("<b>" ++ group ++ "</b>")
-    labelBox <- mkLabelBox label ("group_" ++ group)
-    liftIO $ widgetShowAll labelBox
-    return labelBox
+
 
 groupMenuLabel :: PaneMonad beta => String -> beta (Maybe Label)
 groupMenuLabel group = liftM Just (liftIO $ labelNew (Just group))
@@ -691,37 +709,32 @@ viewCollapse = do
 
 viewCollapse' :: PaneMonad alpha => PanePath -> alpha ()
 viewCollapse' panePath = do
-    trace ("Collapse : " ++ (show panePath)) $ return ()
-    layout1           <- getLayoutSt
+    layout1  <- trace ("Collapse : " ++ show panePath) $ getLayoutSt
     case layoutFromPath panePath layout1 of
-        (TerminalP _ _ _ (Just _) _) -> trace ("ViewFrame>>viewCollapse': can't collapse detached: ")
+        (TerminalP _ _ _ (Just _) _) -> trace ("ViewFrame>>viewCollapse'+: can't collapse detached: ")
                                             return ()
         _                            -> do
             let newPanePath   = init panePath
             let mbOtherSidePath = otherSide panePath
             case mbOtherSidePath of
                 Nothing -> return ()
-                Just otherSidePath ->
-                    let sp1 = getGroupPathForCollapse panePath layout1
-                        sp2 = getGroupPathForCollapse otherSidePath layout1
-                    in do
-                    case sp1 of
-                        Nothing -> return ()
-                        Just sp -> viewCollapse' sp
-                    case  sp2 of
-                        Nothing -> return ()
-                        Just sp -> viewCollapse' sp
+                Just otherSidePath -> do
                     paneMap         <- getPaneMapSt
                     activeNotebook  <- getNotebook panePath
                     st  <- getFrameState
                     otherSideNotebook <- getNotebook otherSidePath
-                    setFrameState st{panePathFromNB = (Map.delete otherSideNotebook
+                    trace ("viewCollapse before: " ++ show (panePathFromNB st)) $
+                        setFrameState st{panePathFromNB = (Map.delete otherSideNotebook
                                                         (Map.insert activeNotebook newPanePath (panePathFromNB st)))}
+                    st  <- getFrameState
+                    trace ("viewCollapse after: " ++ show (panePathFromNB st)) $
+                        return ()
                     let paneNamesToMove = map (\(w,(p,_)) -> w)
                                             $filter (\(w,(p,_)) -> otherSidePath `isPrefixOf` p)
                                                 $Map.toList paneMap
                     panesToMove <- mapM paneFromName paneNamesToMove
                     mapM_ (\(PaneC p) -> move panePath p) panesToMove
+
                     mbParent <- liftIO $ widgetGetParent activeNotebook
                     case mbParent of
                         Nothing -> error "collapse: no parent"
@@ -746,8 +759,10 @@ viewCollapse' panePath = do
                                                 (GroupP group, Just n) -> do
                                                     liftIO $ notebookInsertPage (castToNotebook grandparent) activeNotebook group n
                                                     label <- groupLabel group
+                                                    liftIO $ notebookSetTabLabel (castToNotebook grandparent) activeNotebook label
+                                                    label2 <- groupMenuLabel group
+                                                    liftIO $ notebookSetMenuLabel (castToNotebook grandparent) activeNotebook label2
                                                     liftIO $ do
-                                                        notebookSetTabLabel (castToNotebook grandparent) activeNotebook label
                                                         notebookSetCurrentPage (castToNotebook grandparent) n
                                                         return ()
                                                 _ -> error "collapse: Unable to find page index"
@@ -817,16 +832,16 @@ dragMove (paneName,toNB) = do
     panes           <-  getPanesSt
     layout          <-  getLayout
     frameState      <-  getFrameState
-    case "group_" `stripPrefix` paneName of
+    case groupPrefix `stripPrefix` paneName of
         Just group  -> do
-            trace ("dragMove a group Layout before: " ++ show layout) return ()
+            --trace ("dragMove a group Layout before: " ++ show layout) return ()
             case findGroupPath group layout of
                 Nothing -> trace ("ViewFrame>>dragMove: group not found: " ++ group) return ()
                 Just fromPath -> do
                     groupNBOrPaned <- getNotebookOrPaned fromPath castToWidget
                     fromNB  <- getNotebook (init fromPath)
                     case toNB `Map.lookup` (panePathFromNB frameState) of
-                        Nothing -> trace "ViewFrame>>dragMove: panepath for Notebook not found" return ()
+                        Nothing -> trace "ViewFrame>>dragMove: panepath for Notebook not found1" return ()
                         Just toPath -> do
                             when (fromNB /= toNB && not (isPrefixOf fromPath toPath)) $ do
                                 mbNum <- liftIO $ notebookPageNum fromNB groupNBOrPaned
@@ -835,20 +850,20 @@ dragMove (paneName,toNB) = do
                                     Just num -> do
                                         liftIO $ notebookRemovePage fromNB num
                                         label <- groupLabel group
-                                        notebookInsertOrdered toNB groupNBOrPaned group Nothing
+                                        notebookInsertOrdered toNB groupNBOrPaned group Nothing True
                                         liftIO $ notebookSetTabLabel toNB groupNBOrPaned label
                                         adjustPanes fromPath (toPath ++ [GroupP group])
                                         adjustLayoutForGroupMove fromPath toPath group
                                         adjustNotebooks fromPath (toPath ++ [GroupP group])
                                         layout2          <-  getLayout
-                                        trace ("dragMove a group Layout after: " ++ show layout2) return ()
+                                        -- trace ("dragMove a group Layout after: " ++ show layout2) return ()
                                         return ()
         Nothing     ->
             case paneName `Map.lookup` panes of
                 Nothing -> trace ("ViewFrame>>dragMove: pane not found: " ++ paneName) return ()
                 Just (PaneC pane) -> do
                     case toNB `Map.lookup` (panePathFromNB frameState) of
-                        Nothing -> trace "ViewFrame>>dragMove: panepath for Notebook not found" return ()
+                        Nothing -> trace "ViewFrame>>dragMove: panepath for Notebook not found2" return ()
                         Just toPath ->
                             case paneName `Map.lookup`paneMap of
                                 Nothing -> trace ("ViewFrame>>dragMove: pane data not found: " ++ paneName)
@@ -864,7 +879,7 @@ dragMove (paneName,toNB) = do
                                             Nothing ->  trace "ViewFrame>>dragMove: widget not found" return ()
                                             Just num -> do
                                                 liftIO $ notebookRemovePage fromNB num
-                                                notebookInsertOrdered toNB child paneName Nothing
+                                                notebookInsertOrdered toNB child paneName Nothing False
                                                 let paneMap1    =   Map.delete paneName paneMap
                                                 trace ("drag move name: " ++ paneName ++ " path: " ++ show toPath) $
                                                     setPaneMapSt    $   Map.insert paneName (toPath,cid) paneMap1
@@ -886,7 +901,7 @@ move toPane idew  = do
             mbBox   <- liftIO $ notebookGetTabLabel fromNB child
             theText <- liftIO $ widgetGetName child
             liftIO $ notebookRemovePage fromNB pn
-            notebookInsertOrdered toNB child theText Nothing
+            notebookInsertOrdered toNB child theText Nothing (isJust (groupPrefix `stripPrefix` theText))
     let paneMap1    =   Map.delete (paneName idew) paneMap
     trace ("move name: " ++ (paneName idew) ++ " path: " ++ show toPane) $
         setPaneMapSt    $   Map.insert (paneName idew) (toPane,cid) paneMap1
@@ -1156,7 +1171,7 @@ paneDirectionToWidgetName RightP    =  "right"
 
 panePathElementToWidgetName :: PanePathElement -> String
 panePathElementToWidgetName (SplitP dir)   = paneDirectionToWidgetName dir
-panePathElementToWidgetName (GroupP group) = "group_" ++ group
+panePathElementToWidgetName (GroupP group) = groupPrefix ++ group
 
 --
 -- | Changes a pane path in the pane map
@@ -1173,10 +1188,13 @@ adjustPanes fromPane toPane  = do
 adjustNotebooks :: PaneMonad alpha => PanePath -> PanePath -> alpha ()
 adjustNotebooks fromPane toPane  = do
     npMap <- getPanePathFromNB
-    setPanePathFromNB  (Map.map (\pp ->
-        case stripPrefix fromPane pp of
-            Just rest -> toPane++rest
-            _         -> pp) npMap)
+    trace ("adjustNotebooks before " ++ show npMap) $
+        setPanePathFromNB  (Map.map (\pp ->
+            case stripPrefix fromPane pp of
+                Just rest -> toPane++rest
+                _         -> pp) npMap)
+    npMap <- getPanePathFromNB
+    trace ("adjustNotebooks after " ++ show npMap) $ return ()
 
 --
 -- | Changes the layout for a split

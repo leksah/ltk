@@ -71,7 +71,7 @@ class (Monad gamma, Event beta delta) => EventSource alpha beta gamma delta
                                         Just l  -> Map.insert e ((unique,handler):l) handlerMap
                 setHandlers o newHandlers
                 return (Just unique)
-            else return Nothing
+            else error $ "Can't register event " ++ show e
     registerEvent o e (Right unique) =
         if canTriggerEvent o e
             then do
@@ -82,5 +82,5 @@ class (Monad gamma, Event beta delta) => EventSource alpha beta gamma delta
                                                   in  Map.insert e newList handlerMap
                 setHandlers o newHandlers
                 return (Just unique)
-            else return Nothing
+            else error $ "Can't register event " ++ show e
 

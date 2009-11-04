@@ -43,3 +43,4 @@ instance Default (Maybe alpha) where
 
 instance Default Bool where
     getDefault      =   True
+
