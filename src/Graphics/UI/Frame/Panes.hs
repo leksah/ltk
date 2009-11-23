@@ -187,6 +187,19 @@ data FrameState delta = FrameState {
 ,   activePane      ::  Maybe (PaneName, Connections)
 ,   panePathFromNB  ::  Map Notebook PanePath
 ,   layout          ::  PaneLayout}
+    deriving Show
+
+instance Show Window where
+    show _ = "a Window"
+
+instance Show UIManager where
+    show _ = "a UIManager"
+
+instance Show Connection where
+    show _ = "a Connection"
+
+instance Show Notebook where
+    show _ = "a Notebook"
 
 --
 -- | Signal handlers for the different pane types

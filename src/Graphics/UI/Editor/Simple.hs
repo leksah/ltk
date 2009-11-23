@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -XScopedTypeVariables #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  Graphics.UI.Editor.Simple
@@ -16,6 +17,7 @@ module Graphics.UI.Editor.Simple (
     noEditor
 ,   boolEditor
 ,   boolEditor2
+,   enumEditor
 ,   clickEditor
 ,   stringEditor
 ,   multilineStringEditor
@@ -47,6 +49,7 @@ import Graphics.UI.Editor.Basics
 import Graphics.UI.Editor.MakeEditor
 import Control.Event
 import Graphics.UI.Gtk.Gdk.Events (Event(..))
+import MyMissing (allOf)
 
 -- ------------------------------------------------------------
 -- * Simple Editors
@@ -57,7 +60,7 @@ instance BinClass Widget
 instance ButtonClass Widget
 
 --
--- | An invisible editor without any
+-- | An invisible editor without any effect
 --
 noEditor :: alpha -> Editor alpha
 noEditor proto parameters notifier =
@@ -132,6 +135,56 @@ boolEditor2 label2 parameters notifier = do
                 Just (radio1,radio2) -> do
                     r <- toggleButtonGetActive radio1
                     return (Just r))
+        (paraName <<<- ParaName "" $ parameters)
+        notifier
+
+--
+-- | Editor for an enum value in the form of n radio buttons
+----
+enumEditor :: forall alpha . (Show alpha, Enum alpha, Bounded alpha)  => [String] -> Editor alpha
+enumEditor labels parameters notifier = do
+    coreRef <- newIORef Nothing
+    let vals :: [alpha] =  allOf
+    mkEditor
+        (\widget enumValue -> do
+            core <- readIORef coreRef
+            case core of
+                Nothing  -> do
+                    box <- vBoxNew True 2
+                    let label0 = if length labels > 0 then labels !! 0 else show (vals !! 0)
+                    button0 <- radioButtonNewWithLabel label0
+                    buttons <- mapM (\ v -> do
+                        let n = fromEnum v
+                        let label = if length labels > n then labels !! n else show v
+                        radio <- if n == 0
+                                    then return button0
+                                    else radioButtonNewWithLabelFromWidget button0 label
+                        boxPackStart box radio PackGrow 2
+                        widgetSetName radio (label ++ show n)
+                        return radio) vals
+                    containerAdd widget box
+                    mapM_
+                        (\e ->
+                            (mapM_
+                                (\b -> activateEvent (castToWidget b) notifier Nothing e)
+                             buttons))
+                        [Clicked,FocusOut,FocusIn]
+                    mapM_ (\(b,n) -> toggleButtonSetActive b (n == fromEnum enumValue))
+                                (zip buttons [0..length buttons - 1])
+                    writeIORef coreRef (Just buttons)
+                Just buttons -> do
+                    mapM_ (\(b,n) -> toggleButtonSetActive b (n == fromEnum enumValue))
+                                (zip buttons [0..length buttons - 1]))
+        (do core <- readIORef coreRef
+            case core of
+                Nothing -> return Nothing
+                Just buttons -> do
+                    boolArray <- mapM toggleButtonGetActive buttons
+                    let mbInd =  findIndex (== True) boolArray
+                    let res = case mbInd of
+                                Nothing -> Nothing
+                                Just i -> Just (vals !! i)
+                    return res)
         (paraName <<<- ParaName "" $ parameters)
         notifier
 
