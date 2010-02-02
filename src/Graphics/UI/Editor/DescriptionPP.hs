@@ -36,8 +36,7 @@ data FieldDescriptionPP alpha gamma =  FDPP {
     ,   fieldPrinter    ::  alpha -> PP.Doc
     ,   fieldParser     ::  alpha -> P.CharParser () alpha
     ,   fieldEditor     ::  alpha -> IO (Widget, Injector alpha , alpha -> Extractor alpha , Notifier)
-    ,   applicator      ::  alpha -> alpha -> gamma ()
-    }
+    ,   applicator      ::  alpha -> alpha -> gamma ()}
     | VFDPP Parameters [FieldDescriptionPP alpha gamma]
     | HFDPP Parameters [FieldDescriptionPP alpha gamma]
     | NFDPP [(String,FieldDescriptionPP alpha gamma)]

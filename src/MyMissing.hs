@@ -20,15 +20,18 @@ module MyMissing (
 ,   split
 ,   replace
 ,   nonEmptyLines
+,   trim
 ) where
 
 import Data.List (find,unfoldr)
 import Data.Maybe (isJust)
 import Data.Char (isSpace)
 
--- ---------------------------------------------------------------------
--- | A class for pretty printing
---
+
+-- | remove leading and trailing spaces
+trim :: String -> String
+trim      = f . f
+   where f = reverse . dropWhile isSpace
 
 nonEmptyLines :: String -> [String]
 nonEmptyLines = filter (\line -> isJust $ find (not . isSpace) line) . lines

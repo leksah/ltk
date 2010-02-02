@@ -2,7 +2,7 @@
     -XExistentialQuantification
     -XMultiParamTypeClasses
     -XFunctionalDependencies
-    -XNoMonomorphismRestriction  #-}
+    -XNoMonomorphismRestriction -XCPP #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  IDE.Core.Panes
@@ -87,6 +87,7 @@ data PaneLayout =       HorizontalP PaneLayout PaneLayout Int
 class (Typeable alpha, PaneMonad delta) =>  Pane alpha delta | alpha -> delta  where
 
     getTopWidget    ::   alpha -> Widget
+    -- ^ gets the top Widget of this pane
     paneId          ::   alpha -> String
     primPaneName    ::   alpha -> String
 
@@ -156,7 +157,7 @@ class MonadIO delta =>  PaneMonad delta where
     displayThisPane ::  forall alpha beta . RecoverablePane alpha beta delta => alpha -> Bool -> delta ()
     getOrBuildThisPane
                     ::  forall alpha beta . RecoverablePane alpha beta delta => Either PanePath String -> delta (Maybe alpha)
-    buildThisPane   ::  forall alpha beta  . RecoverablePane alpha beta delta =>
+    buildThisPane   ::  forall alpha beta . RecoverablePane alpha beta delta =>
                         PanePath ->
                         Notebook ->
                         (PanePath -> Notebook -> Window -> delta (Maybe alpha,Connections)) ->
@@ -185,7 +186,7 @@ data FrameState delta = FrameState {
 ,   panes           ::  Map PaneName (IDEPane delta)
 ,   paneMap         ::  (Map PaneName (PanePath, Connections))
 ,   activePane      ::  Maybe (PaneName, Connections)
-,   panePathFromNB  ::  Map Notebook PanePath
+,   panePathFromNB  ::  ! (Map Notebook PanePath)
 ,   layout          ::  PaneLayout}
     deriving Show
 
