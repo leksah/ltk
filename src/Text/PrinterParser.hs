@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -XTypeSynonymInstances #-}
 --
 -- | Module for saving and restoring preferences and settings
 --
@@ -23,6 +24,9 @@ module Text.PrinterParser (
 ,   colorParser
 
 ,   emptyPrinter
+,   Pretty(..)
+,   prettyPrint
+,   maybePP
 
 ,   symbol
 ,   colon
@@ -36,7 +40,7 @@ module Text.PrinterParser (
 import Text.ParserCombinators.Parsec.Language
 import qualified Text.ParserCombinators.Parsec.Token as P
 import Text.ParserCombinators.Parsec hiding(Parser)
-import qualified Text.PrettyPrint.HughesPJ as PP
+import qualified Text.PrettyPrint as PP
 
 import Graphics.UI.Editor.Parameters
 import Graphics.UI.Editor.Basics
@@ -188,10 +192,28 @@ integer = P.integer lexer
 -- ------------------------------------------------------------
 -- * Printing
 -- ------------------------------------------------------------
+-- | pretty-print with the default style and 'defaultMode'.
+prettyPrint :: Pretty a => a -> String
+prettyPrint a = PP.renderStyle  PP.style (pretty a)
 
+-- | Things that can be pretty-printed
+class Pretty a where
+	-- | Pretty-print something in isolation.
+	pretty :: a -> PP.Doc
+	-- | Pretty-print something in a precedence context.
+	prettyPrec :: Int -> a -> PP.Doc
+	pretty = prettyPrec 0
+	prettyPrec _ = pretty
+	
 emptyPrinter ::  () ->  PP.Doc
 emptyPrinter _ = PP.empty
 
+maybePP :: (a -> PP.Doc) -> Maybe a -> PP.Doc
+maybePP _ Nothing = PP.empty
+maybePP pp (Just a) = pp a
+
+instance Pretty String where
+    pretty str = PP.text str
 
 -- ------------------------------------------------------------
 -- * Read and write
