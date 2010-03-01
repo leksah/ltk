@@ -55,8 +55,6 @@ import Distribution.Simple
      PackageIdentifier(..))
 import Distribution.Text (simpleParse, display)
 import Distribution.Package (pkgName)
-import Distribution.Version
-    (VersionRange(..))
 import Data.Version (Version(..))
 import MyMissing (forceJust)
 
