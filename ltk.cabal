@@ -17,7 +17,7 @@ synopsis: Leksah tool kit
 description: UI Framework used by leksah
 category: GUI
 author: Juergen "jutaro" Nicklisch-Franken
-tested-with:
+tested-with: GHC ==6.10 || ==6.12
 data-files:
 data-dir: ""
 extra-source-files:
