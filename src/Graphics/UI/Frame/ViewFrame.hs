@@ -100,9 +100,17 @@ import Data.Typeable
 import Graphics.UI.Frame.Panes
 import Graphics.UI.Editor.Parameters
 import System.Glib (GObjectClass(..), isA)
+#if MIN_VERSION_gtk(0,10,5)
+import Graphics.UI.Gtk.Layout.Notebook (gTypeNotebook)
+#else
 import Graphics.UI.Gtk.Types (gTypeNotebook)
+#endif
 import System.CPUTime (getCPUTime)
+#if MIN_VERSION_gtk(0,10,5)
+import Graphics.UI.Gtk.Gdk.EventM (Modifier(..))
+#else
 import Graphics.UI.Gtk.Gdk.Enums (Modifier(..))
+#endif
 import MyMissing
 import Graphics.UI.Gtk.Gdk.EventM (TimeStamp(..))
 import Graphics.UI.Editor.MakeEditor

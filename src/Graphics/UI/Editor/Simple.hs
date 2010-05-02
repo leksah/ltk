@@ -36,7 +36,11 @@ module Graphics.UI.Editor.Simple (
 ,   okCancelFields
 ) where
 
+#if MIN_VERSION_gtk(0,10,5)
+import Graphics.UI.Gtk hiding (eventKeyName, eventModifier)
+#else
 import Graphics.UI.Gtk
+#endif
 import qualified Graphics.UI.Gtk as Gtk
 import Control.Monad
 import Data.IORef
@@ -48,7 +52,11 @@ import Graphics.UI.Editor.Parameters
 import Graphics.UI.Editor.Basics
 import Graphics.UI.Editor.MakeEditor
 import Control.Event
+#if MIN_VERSION_gtk(0,10,5)
 import Graphics.UI.Gtk.Gdk.Events (Event(..))
+#else
+import Graphics.UI.Gtk.Gdk.Events (Event(..))
+#endif
 import MyMissing (allOf)
 
 -- ------------------------------------------------------------
