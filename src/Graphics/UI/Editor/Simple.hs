@@ -664,10 +664,10 @@ fileEditor mbFilePath action buttonName parameters notifier = do
         case mbFileName of
             Nothing -> return (e{gtkReturn=True})
             Just fn -> do
-                let relative = case mbFilePath of
-                                Nothing -> fn
-                                Just rel -> makeRelative rel fn
-                entrySetText entry relative
+--                let relative = case mbFilePath of
+--                                Nothing -> fn
+--                                Just rel -> makeRelative rel fn
+                entrySetText entry fn
 --                triggerEvent notifier SelectionChanged...
                 return (e{gtkReturn=True})
 
