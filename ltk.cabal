@@ -6,11 +6,13 @@ license: GPL
 license-file: LICENSE
 copyright: Juergen "jutaro" Nicklisch-Franken
 maintainer: maintainer@leksah.org
-build-depends: Cabal >=1.6.0, base >=4.0.0.0 && <5.0.0.0,
-               containers >=0.2, filepath >=1.1.0, glib >=0.10.0, gtk >=0.10.0,
-               mtl >=1.1.0.2, parsec >=2.1.0.1, pretty >=1.0.1.0,
+build-depends: Cabal >=1.6.0 && <1.9, base >=4.0.0.0 && <4.3,
+               containers >=0.2 && <0.4, filepath >=1.1.0 && <1.2,
+               glib >=0.10.0 && <0.12, gtk >=0.10.0 && <0.12,
+               mtl >=1.1.0.2 && <1.2, parsec >=2.1.0.1 && <2.2,
+               pretty >=1.0.1.0 && <1.1,
                -- Make sure we get the Cabal compaitble with ghc and haddock
-               haddock, ghc
+               haddock <2.8, ghc <6.13
 stability:
 homepage: http://www.leksah.org
 package-url: http://code.haskell.org/ltk
