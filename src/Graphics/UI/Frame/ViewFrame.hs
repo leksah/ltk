@@ -133,9 +133,10 @@ withoutGroupPrefix s = case groupPrefix `stripPrefix` s of
                             Nothing -> s
                             Just s' -> s'
 
+
 initGtkRc :: IO ()
-initGtkRc = return ()
-{--	rcParseString ("style \"leksah-close-button-style\"\n" ++
+#if MIN_VERSION_gtk(0,11,0)
+initGtkRc = rcParseString ("style \"leksah-close-button-style\"\n" ++
     "{\n" ++
     "  GtkWidget::focus-padding = 0\n" ++
     "  GtkWidget::focus-line-width = 0\n" ++
@@ -143,7 +144,9 @@ initGtkRc = return ()
     "  ythickness = 0\n" ++
     "}\n" ++
     "widget \"*.leksah-close-button\" style \"leksah-close-button-style\"")
---}
+#else
+initGtkRc = return ()
+#endif
 
 removePaneAdmin :: RecoverablePane alpha beta delta =>  alpha -> delta ()
 removePaneAdmin pane = do
