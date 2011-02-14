@@ -49,7 +49,7 @@ import Data.Maybe
 import System.FilePath.Posix
 
 import Graphics.UI.Editor.Parameters
-import Graphics.UI.Editor.Basics
+--import Graphics.UI.Editor.Basics
 import Graphics.UI.Editor.MakeEditor
 import Control.Event
 #if MIN_VERSION_gtk(0,10,5)
@@ -58,9 +58,11 @@ import Graphics.UI.Gtk.Gdk.Events (Event(..))
 import Graphics.UI.Gtk.Gdk.Events (Event(..))
 #endif
 import MyMissing (trim, allOf)
-import qualified Graphics.UI.Gtk.Gdk.Events as GTK (Event(..))
 import qualified Graphics.UI.Gtk.Gdk.Events as Gtk (Event(..))
 import Unsafe.Coerce (unsafeCoerce)
+import Graphics.UI.Editor.Basics
+       (GUIEvent(..), GUIEventSelector(..), propagateAsChanged,
+        genericGUIEvents, activateEvent, Editor)
 
 -- ------------------------------------------------------------
 -- * Simple Editors
@@ -201,8 +203,8 @@ enumEditor labels parameters notifier = do
 
 -- | An Editor for nothing (which may report a click) in the form of a button
 --
-clickEditor :: Editor ()
-clickEditor parameters notifier = do
+clickEditor :: Bool -> Editor ()
+clickEditor canDefault parameters notifier = do
     coreRef <- newIORef Nothing
     mkEditor
         (\widget bool -> do
@@ -216,6 +218,9 @@ clickEditor parameters notifier = do
                     containerAdd widget button
                     activateEvent (castToWidget button) notifier Nothing Clicked
                     writeIORef coreRef (Just button)
+                    when canDefault $ do
+                        set button [widgetCanDefault := True]
+                        widgetGrabDefault button
                 Just button -> return ())
         (return (Just ()))
         (paraName <<<- ParaName "" $ parameters)
@@ -680,7 +685,11 @@ fileEditor mbFilePath action buttonName parameters notifier = do
 --                                Nothing -> fn
 --                                Just rel -> makeRelative rel fn
                 entrySetText entry fn
---                triggerEvent notifier SelectionChanged...
+                triggerEvent notifier (GUIEvent {
+                    selector = MayHaveChanged,
+                    gtkEvent = Gtk.Event True,
+                    eventText = "",
+                    gtkReturn = True})
                 return (e{gtkReturn=True})
 
 --
@@ -802,12 +811,12 @@ okCancelFields = HFD emptyParams [
                     $ emptyParams)
             (const ())
             (\ _ b -> b)
-            clickEditor
+            (clickEditor False)
     ,   mkField
             (paraStockId <<<- ParaStockId stockOk
                 $ paraName <<<- ParaName "Ok"
                     $ emptyParams)
             (const ())
             (\ a b -> b)
-            clickEditor]
+            (clickEditor True)]
 
