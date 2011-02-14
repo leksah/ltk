@@ -17,12 +17,15 @@ module Control.Event (
 ,   Event(..)
 ,   EventSource(..)
 ,   Handlers
+
+,   registerEvents
 ) where
 
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Unique
 import Control.Monad
+import Data.Maybe (catMaybes)
 
 -- | Every event needs a selector, which should identify the type of event
 class (Eq delta, Ord delta, Show delta) =>  EventSelector delta
@@ -35,6 +38,10 @@ class EventSelector delta => Event beta delta | beta -> delta, delta -> beta whe
 type Handlers beta gamma delta = Map delta [(Unique, beta  -> gamma beta)]
 
 -- | Everything which is an event source needs this
+-- alpha is the Notifier
+-- beta is the event
+-- gamma is the monad
+-- delta is the event selector
 class (Monad gamma, Event beta delta) => EventSource alpha beta gamma delta
         | alpha -> beta, alpha -> gamma where
     getHandlers     ::  alpha -> gamma (Handlers beta gamma delta)
@@ -46,6 +53,7 @@ class (Monad gamma, Event beta delta) => EventSource alpha beta gamma delta
     canTriggerEvent _ _             =   False
 
     -- | Returns the event, so that you may get values back from an event
+    -- Args: Notifier, Event
     triggerEvent ::  alpha -> beta -> gamma beta
     triggerEvent o e    =
         if canTriggerEvent o (getSelector e)
@@ -57,11 +65,10 @@ class (Monad gamma, Event beta delta) => EventSource alpha beta gamma delta
                     Just l      ->  foldM (\e (_,ah) -> ah e) e (reverse l)
             else error $ "Can't trigger event " ++ show (getSelector e)
 
-    -- | use Left to register and Right to unregister
     -- returns Unique if registration was successfull, else Nothing
-    registerEvent   ::  alpha -> delta
-        -> Either (beta -> gamma beta) Unique -> gamma (Maybe Unique)
-    registerEvent o e (Left handler) =
+    -- Args: Notifier, EventSelector, Handler (Event -> Monad Event)
+    registerEvent   ::  alpha -> delta -> (beta -> gamma beta) -> gamma (Maybe Unique)
+    registerEvent o e handler =
         if canTriggerEvent o e
             then do
                 handlerMap  <-  getHandlers o
@@ -72,7 +79,11 @@ class (Monad gamma, Event beta delta) => EventSource alpha beta gamma delta
                 setHandlers o newHandlers
                 return (Just unique)
             else error $ "Can't register event " ++ show e
-    registerEvent o e (Right unique) =
+
+    -- | use Left to register and Right to unregister
+    -- Args: Notifier, EventSelector, Unique
+    unregisterEvent   ::  alpha -> delta -> Unique -> gamma ()
+    unregisterEvent o e unique =
         if canTriggerEvent o e
             then do
                 handlerMap  <-  getHandlers o
@@ -81,6 +92,8 @@ class (Monad gamma, Event beta delta) => EventSource alpha beta gamma delta
                                         Just l -> let newList = filter (\ (mu,_) -> mu /= unique) l
                                                   in  Map.insert e newList handlerMap
                 setHandlers o newHandlers
-                return (Just unique)
+                return ()
             else error $ "Can't register event " ++ show e
 
+registerEvents :: EventSource alpha beta gamma delta => alpha -> [delta] -> (beta -> gamma beta) -> gamma [Unique]
+registerEvents o l handler = liftM catMaybes (mapM  (\ e -> registerEvent o e handler) l)

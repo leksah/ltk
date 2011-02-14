@@ -1,4 +1,5 @@
-{-# OPTIONS_GHC -XMultiParamTypeClasses -XScopedTypeVariables #-}
+{-# OPTIONS_GHC -XMultiParamTypeClasses -XScopedTypeVariables -XFlexibleContexts -XRankNTypes
+    -XExistentialQuantification #-}
 
 -----------------------------------------------------------------------------
 --
@@ -29,10 +30,14 @@ module Graphics.UI.Editor.Basics (
 ,   GtkRegFunc
 ,   Notifier(..)
 ,   GtkHandler
+,   Connection(..)
+,   Connections
 
 ,   activateEvent
 ,   propagateEvent
 ,   allGUIEvents
+,   genericGUIEvents
+,   propagateAsChanged
 ) where
 
 import Graphics.UI.Gtk
@@ -89,7 +94,7 @@ type Editor alpha  =   Parameters -> Notifier
 data GUIEvent = GUIEvent {
     selector :: GUIEventSelector
 ,   gtkEvent :: Gtk.Event
-,   eventPaneName :: String
+,   eventText :: String
 ,   gtkReturn :: Bool -- ^ True means that the event has been completely handled,
                       --  gtk shoudn't do any further action about it (Often not
                       --  a good idea
@@ -97,18 +102,20 @@ data GUIEvent = GUIEvent {
 instance Event GUIEvent GUIEventSelector where
     getSelector = selector
 
-data GUIEventSelector =   Clicked
-                    |   FocusOut
-                    |   FocusIn
-                    |   SelectionChanged
-                    |   ButtonRelease
-                    |   AfterKeyRelease
+data GUIEventSelector = FocusOut        -- ^ generic, the widget looses the focus
+                    |   FocusIn         -- ^ generic, the widget gets the focus
+                    |   ButtonPressed   -- ^ generic, a mouse key has been pressed and released, while the widget has the focus
+                    |   KeyPressed      -- ^ generic, a keyboard key has been pressed and released, while the widget has the focus
+                    |   Clicked         -- ^ button specific, the button has been pressed
+                    |   MayHaveChanged  -- ^ generic, no gui event, the contents of the widget may have changed
+                    |   ValidationError -- ^ validation of a contents has failed
     deriving (Eq,Ord,Show,Enum,Bounded)
 
 instance EventSelector GUIEventSelector
 
 allGUIEvents :: [GUIEventSelector]
 allGUIEvents = allOf
+genericGUIEvents = [FocusOut,FocusIn,ButtonPressed,KeyPressed]
 
 -- ------------------------------------------------------------
 -- * Implementation of GUI event system
@@ -122,7 +129,7 @@ type GtkHandler = Gtk.Event -> IO Bool
 --
 -- | A type for a function to register a gtk event
 -- |
-type GtkRegFunc = Widget  -> GtkHandler -> IO (ConnectId Widget)
+type GtkRegFunc = forall o . GObjectClass o => o -> GtkHandler -> IO (Connection)
 
 --
 -- | The widgets are the real event sources.
@@ -134,7 +141,7 @@ type GtkRegFunc = Widget  -> GtkHandler -> IO (ConnectId Widget)
 -- are propageted.
 -- The last map is used to unregister propagated events properly
 --
-type GUIEventReg = ([ConnectId Widget],
+type GUIEventReg =  ([Connection],
                         ([Notifier], Map Unique [(Unique,Notifier)]))
 
 --
@@ -152,6 +159,13 @@ emptyNotifier                            =   do
     let noti      =  Noti h
     return noti
 
+--
+-- | Signal handlers for the different pane types
+--
+data Connection =  forall alpha . GObjectClass alpha => ConnectC (ConnectId alpha)
+
+type Connections = [Connection]
+
 instance  EventSource Notifier GUIEvent IO GUIEventSelector where
     getHandlers (Noti pairRef)              =   do
         (h,_) <- readIORef pairRef
@@ -165,7 +179,7 @@ instance  EventSource Notifier GUIEvent IO GUIEventSelector where
 
     canTriggerEvent _ _                     =   True
 
-    registerEvent o@(Noti pairRef) eventSel hand@(Left handler) =   do
+    registerEvent o@(Noti pairRef) eventSel hand =   do
         (handlers, ger)     <-  readIORef pairRef
         unique              <-  myUnique o
         newGer <- case Map.lookup eventSel ger of
@@ -181,12 +195,13 @@ instance  EventSource Notifier GUIEvent IO GUIEventSelector where
                         return (Map.insert eventSel (cids,(notifiers,newUm)) ger)
         let newHandlers =   case eventSel `Map.lookup` handlers of
                                 Nothing -> Map.insert eventSel
-                                                [(unique,handler)] handlers
+                                                [(unique,hand)] handlers
                                 Just l  -> Map.insert eventSel
-                                                ((unique,handler):l) handlers
+                                                ((unique,hand):l) handlers
         writeIORef pairRef (newHandlers,newGer)
         return (Just unique)
-    registerEvent o@(Noti pairRef) eventSel (Right unique) =   do
+
+    unregisterEvent o@(Noti pairRef) eventSel unique =   do
         (handlers, ger) <- readIORef pairRef
         newGer <- case Map.lookup eventSel ger of
             Nothing -> return ger
@@ -194,7 +209,7 @@ instance  EventSource Notifier GUIEvent IO GUIEventSelector where
                 case unique `Map.lookup` um of
                     Nothing ->  return ger
                     Just l  ->  do
-                        mapM_  (\(u,es) -> registerEvent es eventSel (Right u)) l
+                        mapM_  (\(u,es) -> unregisterEvent es eventSel u) l
                         let newUm = unique `Map.delete` um
                         return (Map.insert eventSel (cids,(notis,newUm)) ger)
         let newHandlers =   case eventSel `Map.lookup` handlers of
@@ -203,7 +218,7 @@ instance  EventSource Notifier GUIEvent IO GUIEventSelector where
                                             [] -> Map.delete eventSel handlers
                                             l  -> Map.insert eventSel l handlers
         writeIORef pairRef (newHandlers,newGer)
-        return (Just unique)
+        return ()
 
 --
 -- | Propagate the event with the selector from notifier to eventSource
@@ -230,7 +245,7 @@ propagateEvent (Noti pairRef) eventSources eventSel = do
         case Map.lookup eventSel ger of
             Just (cids,(notifiers,um))
                 -> do
-                    lu <-  mapM (\es -> registerEvent es eventSel (Left hand))
+                    lu <-  mapM (\es -> registerEvent es eventSel hand)
                                     notifiers
                     let jl =  map (first fromJust)
                                     $ filter (isJust.fst)
@@ -243,7 +258,14 @@ propagateEvent (Noti pairRef) eventSources eventSel = do
 -- | Activate the event after the event has been declared and the
 -- widget has been constructed
 --
-activateEvent :: Widget -> Notifier -> Maybe GtkRegFunc -> GUIEventSelector  -> IO()
+
+activateEvent
+  :: (GObjectClass o) =>
+     o
+     -> Notifier
+     -> Maybe (o -> GtkHandler -> IO Connection)
+     -> GUIEventSelector
+     -> IO ()
 activateEvent widget (Noti pairRef) mbRegisterFunc eventSel = do
     let registerFunc    =   case mbRegisterFunc of
                                 Just f  ->  f
@@ -254,9 +276,11 @@ activateEvent widget (Noti pairRef) mbRegisterFunc eventSel = do
                     Nothing -> return False
                     Just [] -> return False
                     Just handlers -> do
-                        name <- widgetGetName widget
+                        name <- if (widget `isA` gTypeWidget)
+                                    then widgetGetName (castToWidget widget)
+                                    else return "no widget - no name"
                         eventList <- mapM (\f -> do
-                            let ev = GUIEvent eventSel e name False
+                            let ev = GUIEvent eventSel e "" False
                             f ev)
                                 (map snd handlers)
                         let boolList = map gtkReturn eventList
@@ -273,13 +297,21 @@ activateEvent widget (Noti pairRef) mbRegisterFunc eventSel = do
 -- | A convinence method for not repeating this over and over again
 --
 getStandardRegFunction :: GUIEventSelector -> GtkRegFunc
-getStandardRegFunction FocusOut         =   \w h -> w `onFocusOut` h
-getStandardRegFunction FocusIn          =   \w h -> w `onFocusIn` h
-getStandardRegFunction ButtonRelease    =   \w h -> w `onButtonRelease` h
-getStandardRegFunction AfterKeyRelease  =   \w h -> w `afterKeyRelease` h
-getStandardRegFunction Clicked          =   \w h -> do
-        res     <-  onClicked (castToButton w) (do
-                        h (Gtk.Event True)
-                        return ())
-        return (unsafeCoerce res)
-getStandardRegFunction SelectionChanged =   error "yet not implemented"
+getStandardRegFunction FocusOut         =   \w h -> liftM ConnectC $ (castToWidget w) `onFocusOut` h
+getStandardRegFunction FocusIn          =   \w h -> liftM ConnectC $ (castToWidget w) `onFocusIn` h
+getStandardRegFunction ButtonPressed    =   \w h -> liftM ConnectC $ (castToWidget w) `afterButtonRelease` h
+getStandardRegFunction KeyPressed       =   \w h -> liftM ConnectC $ (castToWidget w) `afterKeyRelease` h
+getStandardRegFunction Clicked          =   \w h -> liftM ConnectC $ (castToButton w) `onClicked`
+                                                                    (h (Gtk.Event True) >> return ())
+getStandardRegFunction _    =   error "Basic>>getStandardRegFunction: no original GUI event"
+
+registerEvents :: EventSource alpha beta gamma delta => alpha -> [delta] -> (beta -> gamma beta) -> gamma [Maybe Unique]
+registerEvents notifier selectors handler =
+    mapM (\ s -> registerEvent notifier s handler) selectors
+
+propagateAsChanged
+  :: (EventSource alpha GUIEvent m GUIEventSelector) =>
+     alpha -> [GUIEventSelector] -> m ()
+propagateAsChanged notifier selectors =
+    mapM_ (\s -> registerEvent notifier s
+            (\ e -> triggerEvent notifier e{selector = MayHaveChanged})) selectors

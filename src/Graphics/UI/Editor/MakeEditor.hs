@@ -30,13 +30,15 @@ module Graphics.UI.Editor.MakeEditor (
 
 import Graphics.UI.Gtk
 import Control.Monad
-import Data.List(unzip4)
+import Data.List (intersperse, unzip4)
 
 import Control.Event
 import Graphics.UI.Editor.Parameters
 import Graphics.UI.Editor.Basics
 --import Graphics.UI.Frame.ViewFrame
 import Data.Maybe (isNothing)
+import Data.IORef (newIORef)
+import qualified Graphics.UI.Gtk.Gdk.Events as GTK (Event(..))
 
 --
 -- | A constructor type for a field desciption
@@ -140,9 +142,9 @@ buildBoxEditor descrs dir v = do
                                     Just s -> s
                                     Nothing -> "Unnamed") descrs
     let packParas = map (\fd -> getParameter paraPack (parameters fd)) descrs
-    let newExt = (\v -> extractAndValidate v getExts fieldNames)
-    mapM_ (\ (w,p) -> boxPackStart hb w p 0) $ zip widgets packParas
     mapM_ (propagateEvent notifier notifiers) allGUIEvents
+    let newExt = (\v -> extractAndValidate v getExts fieldNames notifier)
+    mapM_ (\ (w,p) -> boxPackStart hb w p 0) $ zip widgets packParas
     return (castToWidget hb, newInj, newExt, notifier)
 
 
@@ -170,15 +172,6 @@ mkField parameters getter setter editor =
                             case b of
                                 Just b -> return (Just (setter b a))
                                 Nothing -> return Nothing)
-            registerEvent noti FocusOut (Left (\e ->  do
-                let name = eventPaneName e
-                e2 <- ext
-                when (isNothing e2) $ do
-                    md <- messageDialogNew Nothing [] MessageWarning ButtonsClose
-                        $ "The field " ++ name ++ " has an invalid value "
-                    dialogRun md
-                    widgetDestroy md
-                return (e{gtkReturn=False})))
             inj (getter dat)
             return (widget,
                     (\a -> inj (getter a)),
@@ -216,8 +209,8 @@ mkEditor injectorC extractor parameters notifier = do
 
 -- | Convenience method to validate and extract fields
 --
-extractAndValidate :: alpha -> [alpha -> Extractor alpha] -> [String] -> IO (Maybe alpha)
-extractAndValidate val getExts fieldNames = do
+extractAndValidate :: alpha -> [alpha -> Extractor alpha] -> [String] -> Notifier -> IO (Maybe alpha)
+extractAndValidate val getExts fieldNames notifier = do
     (newVal,errors) <- foldM (\ (val,errs) (ext,fn) -> do
         extVal <- ext val
         case extVal of
@@ -227,10 +220,11 @@ extractAndValidate val getExts fieldNames = do
     if null errors
         then return (Just newVal)
         else do
-            md <- messageDialogNew Nothing [] MessageWarning ButtonsClose
-                     $ "The following fields have invalid values." ++ concat (reverse errors)
-            dialogRun md
-            widgetDestroy md
+            triggerEvent notifier (GUIEvent {
+                    selector = ValidationError,
+                    gtkEvent = GTK.Event True,
+                    eventText = concat (intersperse ", " errors),
+                    gtkReturn = True})
             return Nothing
 
 extract :: alpha -> [alpha -> Extractor alpha] -> IO (Maybe alpha)

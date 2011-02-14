@@ -14,12 +14,9 @@
 
 module Graphics.UI.Editor.Composite (
     maybeEditor
+,   disableEditor
 ,   pairEditor
 ,   tupel3Editor
---,   tupel4Editor
---,   tupel5Editor
---,   tupel6Editor
---,   tupel7Editor
 ,   splitEditor
 ,   eitherOrEditor
 ,   multisetEditor
@@ -57,6 +54,8 @@ import Distribution.Text (simpleParse, display)
 import Distribution.Package (pkgName)
 import Data.Version (Version(..))
 import MyMissing (forceJust)
+import qualified Graphics.UI.Gtk.Gdk.Events as Gtk (Event(..))
+import Unsafe.Coerce (unsafeCoerce)
 
 --
 -- | An editor which composes two subeditors
@@ -66,7 +65,7 @@ pairEditor (fstEd,fstPara) (sndEd,sndPara) parameters notifier = do
     coreRef <- newIORef Nothing
     noti1   <- emptyNotifier
     noti2   <- emptyNotifier
-    mapM_ (propagateEvent notifier [noti2]) allGUIEvents
+    mapM_ (propagateEvent notifier [noti1,noti2]) allGUIEvents
     fst@(fstFrame,inj1,ext1) <- fstEd fstPara noti1
     snd@(sndFrame,inj2,ext2) <- sndEd sndPara noti2
     mkEditor
@@ -111,7 +110,7 @@ tupel3Editor p1 p2 p3 parameters notifier = do
     noti1   <- emptyNotifier
     noti2   <- emptyNotifier
     noti3   <- emptyNotifier
-    mapM_ (propagateEvent notifier [noti2]) allGUIEvents
+    mapM_ (propagateEvent notifier [noti1,noti2,noti3]) (Clicked : allGUIEvents)
     r1@(frame1,inj1,ext1) <- (fst p1) (snd p1) noti1
     r2@(frame2,inj2,ext2) <- (fst p2) (snd p2) noti2
     r3@(frame3,inj3,ext3) <- (fst p3) (snd p3) noti3
@@ -151,74 +150,6 @@ tupel3Editor p1 p2 p3 parameters notifier = do
                         else return Nothing)
         parameters
         notifier
-
-{--
-tupel4Editor :: (Editor alpha, Parameters)
-    -> (Editor beta, Parameters)
-    -> (Editor gamma, Parameters)
-    -> (Editor delta, Parameters)
-    -> Editor (alpha,beta,gamma,delta)
-tupel4Editor p1 p2 p3 p4 parameters notifier = do
-    (widg,inj,ext) <- pairEditor ((tupel3Editor p1 p2 p3), parameters) p4 parameters notifier
-    return (widg,
-        (\ (a, b, c, d) -> inj ((a,b,c),d)),
-        (do
-            mb <- ext
-            case mb of
-                Nothing        -> return Nothing
-                Just ((a,b,c),d) -> return (Just (a,b,c,d))))
-
-tupel5Editor :: (Editor alpha, Parameters)
-    -> (Editor beta, Parameters)
-    -> (Editor gamma, Parameters)
-    -> (Editor delta, Parameters)
-    -> (Editor epsilon, Parameters)
-    -> Editor (alpha,beta,gamma,delta,epsilon)
-tupel5Editor p1 p2 p3 p4 p5 parameters notifier = do
-    (widg,inj,ext) <- pairEditor ((tupel4Editor p1 p2 p3 p4), parameters) p5 parameters notifier
-    return (widg,
-        (\ (a, b, c, d, e) -> inj ((a,b,c,d),e)),
-        (do
-            mb <- ext
-            case mb of
-                Nothing        -> return Nothing
-                Just ((a,b,c,d),e) -> return (Just (a,b,c,d,e))))
-
-tupel6Editor :: (Editor alpha, Parameters)
-    -> (Editor beta, Parameters)
-    -> (Editor gamma, Parameters)
-    -> (Editor delta, Parameters)
-    -> (Editor epsilon, Parameters)
-    -> (Editor zeta, Parameters)
-    -> Editor (alpha,beta,gamma,delta,epsilon,zeta)
-tupel6Editor p1 p2 p3 p4 p5 p6 parameters notifier = do
-    (widg,inj,ext) <- pairEditor ((tupel5Editor p1 p2 p3 p4 p5), parameters) p6 parameters notifier
-    return (widg,
-        (\ (a, b, c, d, e, f) -> inj ((a,b,c,d,e),f)),
-        (do
-            mb <- ext
-            case mb of
-                Nothing        -> return Nothing
-                Just ((a,b,c,d,e),f) -> return (Just (a,b,c,d,e,f))))
-
-tupel7Editor :: (Editor alpha, Parameters)
-    -> (Editor beta, Parameters)
-    -> (Editor gamma, Parameters)
-    -> (Editor delta, Parameters)
-    -> (Editor epsilon, Parameters)
-    -> (Editor zeta, Parameters)
-    -> (Editor eta, Parameters)
-    -> Editor (alpha,beta,gamma,delta,epsilon,zeta,eta)
-tupel7Editor p1 p2 p3 p4 p5 p6 p7 parameters notifier = do
-    (widg,inj,ext) <- pairEditor ((tupel6Editor p1 p2 p3 p4 p5 p6), parameters) p7 parameters notifier
-    return (widg,
-        (\ (a, b, c, d, e, f, g) -> inj ((a,b,c,d,e,f),g)),
-        (do
-            mb <- ext
-            case mb of
-                Nothing        -> return Nothing
-                Just ((a,b,c,d,e,f),g) -> return (Just (a,b,c,d,e,f,g))))
---}
 
 --
 -- | Like a pair editor, but with a moveable split
@@ -268,13 +199,10 @@ splitEditor (fstEd,fstPara) (sndEd,sndPara) parameters notifier = do
 --
 maybeEditor :: Default beta => (Editor beta, Parameters) -> Bool -> String -> Editor (Maybe beta)
 maybeEditor (childEdit, childParams) positive boolLabel parameters notifier = do
-    coreRef <- newIORef Nothing
-    childRef  <- newIORef Nothing
+    coreRef      <- newIORef Nothing
+    childRef     <- newIORef Nothing
     notifierBool <- emptyNotifier
-    cNoti   <- emptyNotifier
-    mapM_ (propagateEvent notifier [notifierBool]) [Clicked,FocusIn]
-    mapM_ (propagateEvent notifier [cNoti]) allGUIEvents
-
+    cNoti        <- emptyNotifier
     mkEditor
         (\widget mbVal -> do
             core <- readIORef coreRef
@@ -292,7 +220,8 @@ maybeEditor (childEdit, childParams) positive boolLabel parameters notifier = do
                         notifierBool
                     boxPackStart box boolFrame PackNatural 0
                     containerAdd widget box
-                    registerEvent notifierBool Clicked (Left (onClickedHandler widget coreRef childRef cNoti))
+                    registerEvent notifierBool Clicked (onClickedHandler widget coreRef childRef cNoti)
+                    propagateEvent notifier [notifierBool] MayHaveChanged
                     case mbVal of
                         Nothing -> inj1 (not positive)
                         Just val -> do
@@ -377,6 +306,142 @@ maybeEditor (childEdit, childParams) positive boolLabel parameters notifier = do
             Nothing -> do
                 let val = childEditor
                 editor@(_,_,_) <- childEditor childParams cNoti
+                mapM_ (propagateEvent notifier [cNoti]) allGUIEvents
+                writeIORef childRef (Just editor)
+                return editor
+    hasChildEditor childRef =  do
+        mb <- readIORef childRef
+        return (isJust mb)
+
+
+--
+-- | An editor with a subeditor which gets active, when a checkbox is selected
+-- or grayed out (if the positive Argument is False)
+--
+disableEditor :: Default beta => (Editor beta, Parameters) -> Bool -> String -> Editor (Bool,beta)
+disableEditor (childEdit, childParams) positive boolLabel parameters notifier = do
+    coreRef      <- newIORef Nothing
+    childRef     <- newIORef Nothing
+    notifierBool <- emptyNotifier
+    cNoti        <- emptyNotifier
+    mkEditor
+        (\widget mbVal -> do
+            core <- readIORef coreRef
+            case core of
+                Nothing  -> do
+                    box <- case getParameter paraDirection parameters of
+                        Horizontal -> do
+                            b <- hBoxNew False 1
+                            return (castToBox b)
+                        Vertical -> do
+                            b <- vBoxNew False 1
+                            return (castToBox b)
+                    be@(boolFrame,inj1,ext1) <- boolEditor
+                        (paraName <<<- ParaName boolLabel $ emptyParams)
+                        notifierBool
+                    boxPackStart box boolFrame PackNatural 0
+                    containerAdd widget box
+                    registerEvent notifierBool Clicked
+                        (onClickedHandler widget coreRef childRef cNoti)
+                    propagateEvent notifier [notifierBool] MayHaveChanged
+                    case mbVal of
+                        (False,val) -> do
+                            (childWidget,inj2,ext2) <- getChildEditor childRef childEdit childParams cNoti
+                            boxPackEnd box childWidget PackGrow 0
+                            widgetShowAll childWidget
+                            inj1 ( not positive)
+                            inj2 val
+                            widgetSetSensitive childWidget False
+                        (True,val) -> do
+                            (childWidget,inj2,ext2) <- getChildEditor childRef childEdit childParams cNoti
+                            boxPackEnd box childWidget PackGrow 0
+                            widgetShowAll childWidget
+                            inj1 positive
+                            inj2 val
+                            widgetSetSensitive childWidget True
+                    writeIORef coreRef (Just (be,box))
+                Just (be@(boolFrame,inj1,extt),box) -> do
+                    hasChild <- hasChildEditor childRef
+                    case mbVal of
+                        (False,val) ->
+                            if hasChild
+                                then do
+                                    (childWidget,_,_) <- getChildEditor childRef childEdit childParams cNoti
+                                    inj1 (not positive)
+                                    widgetSetSensitive childWidget False
+                                else inj1 (not positive)
+                        (True,val) ->
+                            if hasChild
+                                then do
+                                    inj1 positive
+                                    (childWidget,inj2,_) <- getChildEditor childRef childEdit childParams cNoti
+                                    inj2 val
+                                    widgetSetSensitive childWidget True
+                                else do
+                                    inj1 positive
+                                    (childWidget,inj2,_) <- getChildEditor childRef childEdit childParams cNoti
+                                    boxPackEnd box childWidget PackGrow 0
+                                    widgetSetSensitive childWidget True
+                                    inj2 val)
+        (do
+            core <- readIORef coreRef
+            case core of
+                Nothing  -> return Nothing
+                Just (be@(boolFrame,inj1,ext1),_) -> do
+                    bool <- ext1
+                    case bool of
+                        Nothing -> return Nothing
+                        Just bv | bv == positive -> do
+                            (_,_,ext2) <- getChildEditor childRef childEdit childParams cNoti
+                            value <- ext2
+                            case value of
+                                Nothing -> return Nothing
+                                Just value -> return (Just (True, value))
+                        otherwise -> do
+                            (_,_,ext2) <- getChildEditor childRef childEdit childParams cNoti
+                            value <- ext2
+                            case value of
+                                Nothing -> return Nothing
+                                Just value -> return (Just (False, value)))
+        parameters
+        notifier
+    where
+    onClickedHandler widget coreRef childRef cNoti event = do
+        core <- readIORef coreRef
+        case core of
+            Nothing  -> error "Impossible"
+            Just (be@(boolFrame,inj1,ext1),vBox) -> do
+                mbBool <- ext1
+                case mbBool of
+                    Just bool ->
+                        if bool /= positive
+                            then do
+
+                                hasChild <- hasChildEditor childRef
+                                when hasChild $ do
+                                    (childWidget,_,_) <- getChildEditor childRef childEdit childParams cNoti
+                                    widgetSetSensitive childWidget False
+                            else do
+                                hasChild <- hasChildEditor childRef
+                                if hasChild
+                                    then do
+                                        (childWidget,_,_) <- getChildEditor childRef childEdit childParams cNoti
+                                        widgetSetSensitive childWidget True
+                                    else do
+                                        (childWidget,inj2,_) <- getChildEditor childRef childEdit childParams cNoti
+                                        boxPackEnd vBox childWidget PackNatural 0
+                                        inj2 getDefault
+                                        widgetSetSensitive childWidget True
+                    Nothing -> return ()
+                return (event {gtkReturn=True})
+    getChildEditor childRef childEditor childParams cNoti =  do
+        mb <- readIORef childRef
+        case mb of
+            Just editor -> return editor
+            Nothing -> do
+                let val = childEditor
+                editor@(_,_,_) <- childEditor childParams cNoti
+                mapM_ (propagateEvent notifier [cNoti]) allGUIEvents
                 writeIORef childRef (Just editor)
                 return editor
     hasChildEditor childRef =  do
@@ -403,7 +468,7 @@ eitherOrEditor (leftEditor,leftParams) (rightEditor,rightParams)
             core <- readIORef coreRef
             case core of
                 Nothing  -> do
-                    registerEvent noti1 Clicked (Left (onClickedHandler widget coreRef))
+                    registerEvent noti1 Clicked (onClickedHandler widget coreRef)
                     box <- case getParameter paraDirection parameters of
                         Horizontal -> do
                             b <- hBoxNew False 1
@@ -497,7 +562,6 @@ multisetEditor (ColumnDescr showHeaders columnsDD) (singleEditor, sParams) mbSor
         parameters notifier = do
     coreRef <- newIORef Nothing
     cnoti   <- emptyNotifier
-    mapM_ (propagateEvent notifier [cnoti]) allGUIEvents
     mkEditor
         (\widget vs -> do
             core <- readIORef coreRef
@@ -513,11 +577,22 @@ multisetEditor (ColumnDescr showHeaders columnsDD) (singleEditor, sParams) mbSor
                             bb <- hButtonBoxNew
                             return (castToBox b,castToButtonBox bb)
                     (frameS,injS,extS) <- singleEditor sParams cnoti
+                    mapM_ (propagateEvent notifier [cnoti]) allGUIEvents
                     addButton   <- buttonNewWithLabel "Add"
                     removeButton <- buttonNewWithLabel "Remove"
                     containerAdd buttonBox addButton
                     containerAdd buttonBox removeButton
                     listStore   <-  listStoreNew ([]:: [alpha])
+                    activateEvent listStore notifier
+                        (Just (\ w h -> do
+                            res     <-  after (castToTreeModel w) rowInserted (\ _ _ ->
+                                h (Gtk.Event True) >> return ())
+                            return (ConnectC res))) MayHaveChanged
+                    activateEvent listStore notifier
+                        (Just (\ w h -> do
+                            res     <-  after (castToTreeModel w) rowDeleted (\ _ ->
+                                h (Gtk.Event True) >> return ())
+                            return (ConnectC res))) MayHaveChanged
                     treeView        <-  treeViewNewWithModel listStore
                     let minSize =   getParameter paraMinSize parameters
                     uncurry (widgetSetSizeRequest treeView) minSize
@@ -601,7 +676,7 @@ multisetEditor (ColumnDescr showHeaders columnsDD) (singleEditor, sParams) mbSor
         (paraMinSize <<<- ParaMinSize (-1,-1) $ parameters)
         notifier
     where
-    selectionHandler :: TreeSelection -> ListStore a -> Injector a -> IO ()
+--    selectionHandler :: TreeSelection -> ListStore a -> Injector a -> IO ()
     selectionHandler sel listStore inj = do
         ts <- treeSelectionGetSelected sel
         case ts of
@@ -623,11 +698,11 @@ filesEditor fp act label p =
         (paraShadow <<<- ParaShadow ShadowIn $
             paraDirection  <<<- ParaDirection Vertical $ p)
 
-stringsEditor :: (String -> Bool) -> Editor [String]
-stringsEditor validation p =
+stringsEditor :: (String -> Bool) -> Bool -> Editor [String]
+stringsEditor validation trimBlanks p =
     multisetEditor
         (ColumnDescr False [("",(\row -> [cellText := row]))])
-        (stringEditor validation, emptyParams)
+        (stringEditor validation trimBlanks, emptyParams)
         (Just sort)
         (Just (==))
         (paraShadow <<<- ParaShadow ShadowIn $ p)
@@ -637,7 +712,7 @@ dependencyEditor packages para noti = do
     (wid,inj,ext) <- pairEditor
         ((eitherOrEditor (comboSelectionEditor ((sort . nub) (map (display . pkgName) packages)) id
             , paraName <<<- ParaName "Select" $ emptyParams)
-            (stringEditor (const True), paraName <<<- ParaName "Enter" $ emptyParams)
+            (stringEditor (const True) True, paraName <<<- ParaName "Enter" $ emptyParams)
             "Select from list?"), paraName <<<- ParaName "Name"$ emptyParams)
         (versionRangeEditor,paraName <<<- ParaName "Version" $ emptyParams)
         (paraDirection <<<- ParaDirection Vertical $ para)
@@ -754,7 +829,7 @@ instance Show Version2 where
 
 versionEditor :: Editor Version
 versionEditor para noti = do
-    (wid,inj,ext) <- stringEditor (\s -> not (null s)) para noti
+    (wid,inj,ext) <- stringEditor (\s -> not (null s)) True para noti
     let pinj v = inj (display v)
     let pext = do
         s <- ext

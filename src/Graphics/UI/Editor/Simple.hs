@@ -57,7 +57,10 @@ import Graphics.UI.Gtk.Gdk.Events (Event(..))
 #else
 import Graphics.UI.Gtk.Gdk.Events (Event(..))
 #endif
-import MyMissing (allOf)
+import MyMissing (trim, allOf)
+import qualified Graphics.UI.Gtk.Gdk.Events as GTK (Event(..))
+import qualified Graphics.UI.Gtk.Gdk.Events as Gtk (Event(..))
+import Unsafe.Coerce (unsafeCoerce)
 
 -- ------------------------------------------------------------
 -- * Simple Editors
@@ -94,7 +97,8 @@ boolEditor parameters notifier = do
                     containerAdd widget button
                     toggleButtonSetActive button bool
                     mapM_ (activateEvent (castToWidget button) notifier Nothing)
-                        [Clicked,FocusOut,FocusIn]
+                        (Clicked: genericGUIEvents)
+                    propagateAsChanged notifier [Clicked]
                     writeIORef coreRef (Just button)
                 Just button -> toggleButtonSetActive button bool)
         (do core <- readIORef coreRef
@@ -128,10 +132,9 @@ boolEditor2 label2 parameters notifier = do
                     if bool
                         then toggleButtonSetActive radio1 True
                         else toggleButtonSetActive radio2 True
-                    mapM_ (activateEvent (castToWidget radio1) notifier Nothing)
-                                [Clicked,FocusOut,FocusIn]
-                    mapM_ (activateEvent (castToWidget radio2) notifier Nothing)
-                                [Clicked,FocusOut,FocusIn]
+                    mapM_ (activateEvent (castToWidget radio1) notifier Nothing) (Clicked:genericGUIEvents)
+                    mapM_ (activateEvent (castToWidget radio2) notifier Nothing) (Clicked:genericGUIEvents)
+                    propagateAsChanged notifier [Clicked]
                     writeIORef coreRef (Just (radio1,radio2))
                 Just (radio1,radio2) ->
                     if bool
@@ -175,8 +178,8 @@ enumEditor labels parameters notifier = do
                         (\e ->
                             (mapM_
                                 (\b -> activateEvent (castToWidget b) notifier Nothing e)
-                             buttons))
-                        [Clicked,FocusOut,FocusIn]
+                             buttons)) (Clicked:genericGUIEvents)
+                    propagateAsChanged notifier [Clicked]
                     mapM_ (\(b,n) -> toggleButtonSetActive b (n == fromEnum enumValue))
                                 (zip buttons [0..length buttons - 1])
                     writeIORef coreRef (Just buttons)
@@ -243,8 +246,8 @@ imageEditor parameters notifier = do
 --
 -- | Editor for a string in the form of a text entry
 --
-stringEditor :: (String -> Bool) -> Editor String
-stringEditor validation parameters notifier = do
+stringEditor :: (String -> Bool) -> Bool -> Editor String
+stringEditor validation trimBlanks parameters notifier = do
     coreRef <- newIORef Nothing
     mkEditor
         (\widget string -> do
@@ -253,19 +256,19 @@ stringEditor validation parameters notifier = do
                 Nothing  -> do
                     entry   <-  entryNew
                     widgetSetName entry (getParameter paraName parameters)
-                    mapM_ (activateEvent (castToWidget entry) notifier Nothing)
-                                [FocusOut,FocusIn,AfterKeyRelease]
+                    mapM_ (activateEvent (castToWidget entry) notifier Nothing) genericGUIEvents
+                    propagateAsChanged notifier [KeyPressed]
                     containerAdd widget entry
-                    entrySetText entry string
+                    entrySetText entry (if trimBlanks then trim string else string)
                     writeIORef coreRef (Just entry)
-                Just entry -> entrySetText entry string)
+                Just entry -> entrySetText entry (if trimBlanks then trim string else string))
         (do core <- readIORef coreRef
             case core of
                 Nothing -> return Nothing
                 Just entry -> do
                     r <- entryGetText entry
                     if validation r
-                        then return (Just r)
+                        then return (Just (if trimBlanks then trim r else r))
                         else return Nothing)
         parameters
         notifier
@@ -287,8 +290,8 @@ multilineStringEditor parameters notifier = do
                     scrolledWindowSetPolicy aScrolledWindow PolicyAutomatic PolicyAutomatic
                     containerAdd aScrolledWindow aTextView
                     containerAdd widget aScrolledWindow
-                    mapM_ (activateEvent (castToWidget aTextView) notifier Nothing)
-                        [ButtonRelease,FocusOut,FocusIn]
+                    mapM_ (activateEvent (castToWidget aTextView) notifier Nothing) genericGUIEvents
+                    propagateAsChanged notifier [KeyPressed]
                     buffer          <-  textViewGetBuffer aTextView
                     textBufferSetText buffer string
                     writeIORef coreRef (Just (aScrolledWindow,aTextView))
@@ -320,8 +323,13 @@ intEditor (min, max, step) parameters notifier = do
                 Nothing  -> do
                     spin <- spinButtonNewWithRange min max step
                     widgetSetName spin (getParameter paraName parameters)
-                    mapM_ (activateEvent (castToWidget spin) notifier Nothing)
-                                [FocusOut,FocusIn]
+                    mapM_ (activateEvent (castToWidget spin) notifier Nothing) (genericGUIEvents)
+                    activateEvent (castToWidget spin) notifier
+                        (Just (\ w h -> do
+                            res     <-  afterValueSpinned (castToSpinButton w) (do
+                                h (Gtk.Event True)
+                                return ())
+                            return (unsafeCoerce res))) MayHaveChanged
                     containerAdd widget spin
                     spinButtonSetValue spin (fromIntegral v)
                     writeIORef coreRef (Just spin)
@@ -340,7 +348,7 @@ intEditor (min, max, step) parameters notifier = do
 -- | text entry
 genericEditor :: (Show beta, Read beta) => Editor beta
 genericEditor parameters notifier = do
-    (wid,inj,ext) <- stringEditor (const True) parameters notifier
+    (wid,inj,ext) <- stringEditor (const True) True parameters notifier
     let ginj = inj . show
     let gext = do
         s <- ext
@@ -366,8 +374,7 @@ buttonEditor parameters notifier = do
                     button <- buttonNewWithLabel (getParameter paraName parameters)
                     widgetSetName button (getParameter paraName parameters)
                     containerAdd widget button
-                    mapM_ (activateEvent (castToWidget button) notifier Nothing)
-                                [Clicked,FocusIn]
+                    mapM_ (activateEvent (castToWidget button) notifier Nothing) (Clicked:genericGUIEvents)
                     writeIORef coreRef (Just button)
                 Just button -> return ())
         (return (Just ()))
@@ -389,8 +396,13 @@ comboSelectionEditor list showF parameters notifier = do
                     combo <- comboBoxNewText
                     mapM_ (\o -> comboBoxAppendText combo (showF o)) list
                     widgetSetName combo (getParameter paraName parameters)
-                    mapM_ (activateEvent (castToWidget combo) notifier Nothing)
-                            [FocusOut,FocusIn]
+                    mapM_ (activateEvent (castToWidget combo) notifier Nothing) genericGUIEvents
+                    activateEvent (castToWidget combo) notifier
+                        (Just (\ w h -> do
+                            res     <-  on (castToComboBox w) changed (do
+                                h (Gtk.Event True)
+                                return ())
+                            return (unsafeCoerce res))) MayHaveChanged
                     comboBoxSetActive combo 1
                     containerAdd widget combo
                     let ind = elemIndex obj list
@@ -428,8 +440,8 @@ multiselectionEditor parameters notifier = do
                     listStore   <- listStoreNew ([]:: [alpha])
                     listView    <- treeViewNewWithModel listStore
                     widgetSetName listView (getParameter paraName parameters)
-                    mapM_ (activateEvent (castToWidget listView) notifier Nothing)
-                            [FocusOut,FocusIn]
+                    mapM_ (activateEvent (castToWidget listView) notifier Nothing) genericGUIEvents
+                    propagateAsChanged notifier [KeyPressed,ButtonPressed]
                     sel         <- treeViewGetSelection listView
                     treeSelectionSetMode sel SelectionMultiple
                     renderer    <- cellRendererTextNew
@@ -475,8 +487,8 @@ staticListMultiEditor list showF parameters notifier = do
                     listStore <- listStoreNew ([]:: [(Bool,beta)])
                     listView <- treeViewNewWithModel listStore
                     widgetSetName listView (getParameter paraName parameters)
-                    mapM_ (activateEvent (castToWidget listView) notifier Nothing)
-                            [FocusOut,FocusIn]
+                    mapM_ (activateEvent (castToWidget listView) notifier Nothing) genericGUIEvents
+                    propagateAsChanged notifier [KeyPressed,ButtonPressed]
                     sel <- treeViewGetSelection listView
                     treeSelectionSetMode sel SelectionSingle
                     rendererToggle <- cellRendererToggleNew
@@ -546,8 +558,8 @@ staticListEditor list showF parameters notifier = do
                     listStore <- listStoreNew ([]:: [alpha])
                     listView <- treeViewNewWithModel listStore
                     widgetSetName listView (getParameter paraName parameters)
-                    mapM_ (activateEvent (castToWidget listView) notifier Nothing)
-                            [FocusOut,FocusIn]
+                    mapM_ (activateEvent (castToWidget listView) notifier Nothing) genericGUIEvents
+                    propagateAsChanged notifier [KeyPressed,ButtonPressed]
                     sel <- treeViewGetSelection listView
                     treeSelectionSetMode sel
                         (case getParameter paraMultiSel parameters of
@@ -608,13 +620,13 @@ fileEditor mbFilePath action buttonName parameters notifier = do
                     button <- buttonNewWithLabel buttonName
                     widgetSetName button $ getParameter paraName parameters ++ "-button"
                     mapM_ (activateEvent (castToWidget button) notifier Nothing)
-                            [FocusOut,FocusIn,Clicked]
+                        (Clicked:genericGUIEvents)
                     entry   <-  entryNew
                     widgetSetName entry $ getParameter paraName parameters ++ "-entry"
                     -- set entry [ entryEditable := False ]
-                    mapM_ (activateEvent (castToWidget entry) notifier Nothing)
-                            [FocusOut,FocusIn]
-                    registerEvent notifier Clicked (Left (buttonHandler entry))
+                    mapM_ (activateEvent (castToWidget entry) notifier Nothing) genericGUIEvents
+                    registerEvent notifier Clicked (buttonHandler entry)
+                    propagateAsChanged notifier [KeyPressed,ButtonPressed]
                     box <- case getParameter paraDirection parameters of
                                 Horizontal  -> do
                                     r <- hBoxNew False 1
@@ -684,8 +696,13 @@ fontEditor parameters notifier = do
                 Nothing  -> do
                     fs <- fontButtonNew
                     widgetSetName fs $ getParameter paraName parameters
-                    mapM_ (activateEvent (castToWidget fs) notifier Nothing)
-                            [FocusOut,FocusIn,Clicked]
+                    mapM_ (activateEvent (castToWidget fs) notifier Nothing) (Clicked: genericGUIEvents)
+                    activateEvent (castToWidget fs) notifier
+                        (Just (\ w h -> do
+                            res     <-  onFontSet (castToFontButton w)  (do
+                                h (Gtk.Event True)
+                                return ())
+                            return (unsafeCoerce res))) MayHaveChanged
                     containerAdd widget fs
                     case mbValue of
                         Nothing -> return True
@@ -718,8 +735,13 @@ colorEditor parameters notifier = do
                 Nothing  -> do
                     cs <- colorButtonNew
                     widgetSetName cs $ getParameter paraName parameters
-                    mapM_ (activateEvent (castToWidget cs) notifier Nothing)
-                            [FocusOut,FocusIn,Clicked]
+                    mapM_ (activateEvent (castToWidget cs) notifier Nothing) (Clicked: genericGUIEvents)
+                    activateEvent (castToWidget cs) notifier
+                        (Just (\ w h -> do
+                            res     <-  onColorSet (castToColorButton w)  (do
+                                h (Gtk.Event True)
+                                return ())
+                            return (unsafeCoerce res))) MayHaveChanged
                     containerAdd widget cs
                     colorButtonSetColor cs c
                     writeIORef coreRef (Just cs)
@@ -748,9 +770,9 @@ otherEditor func parameters notifier = do
                     button <- buttonNewWithLabel (getParameter paraName parameters)
                     widgetSetName button $ getParameter paraName parameters
                     containerAdd widget button
-                    mapM_ (activateEvent (castToWidget button) notifier Nothing)
-                            [FocusOut,FocusIn,Clicked]
-                    registerEvent notifier Clicked (Left (buttonHandler coreRef))
+                    mapM_ (activateEvent (castToWidget button) notifier Nothing) (Clicked:genericGUIEvents)
+                    registerEvent notifier Clicked (buttonHandler coreRef)
+                    propagateAsChanged notifier [KeyPressed,ButtonPressed,Clicked]
                     writeIORef coreRef (Just (button,val))
                 Just (button, oldval) -> writeIORef coreRef (Just (button, val)))
         (do core <- readIORef coreRef
@@ -775,17 +797,17 @@ otherEditor func parameters notifier = do
 okCancelFields :: FieldDescription ()
 okCancelFields = HFD emptyParams [
         mkField
-            (paraStockId <<<- ParaStockId stockOk
-                $ paraName <<<- ParaName "Ok"
-                    $ emptyParams)
-            (const ())
-            (\ a b -> b)
-            clickEditor
-    ,   mkField
             (paraStockId <<<- ParaStockId stockCancel
                 $ paraName <<<- ParaName "Cancel"
                     $ emptyParams)
             (const ())
             (\ _ b -> b)
+            clickEditor
+    ,   mkField
+            (paraStockId <<<- ParaStockId stockOk
+                $ paraName <<<- ParaName "Ok"
+                    $ emptyParams)
+            (const ())
+            (\ a b -> b)
             clickEditor]
 

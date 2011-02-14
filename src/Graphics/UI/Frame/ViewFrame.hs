@@ -118,7 +118,7 @@ import Graphics.UI.Editor.MakeEditor
 import Graphics.UI.Editor.Simple (stringEditor, okCancelFields)
 import Control.Event (registerEvent)
 import Graphics.UI.Editor.Basics
-    (eventPaneName, GUIEventSelector(..))
+    (eventText, GUIEventSelector(..))
 import qualified Data.Set as  Set (unions, member)
 import Data.Set (Set(..))
 import Graphics.UI.Gtk.Gdk.Events (Event(..))
@@ -628,11 +628,11 @@ groupNameDialog parent =  liftIO $ do
     lower                      <-   dialogGetActionArea dia
     (widget,inj,ext,_)         <-   buildEditor moduleFields ""
     (widget2,_,_,notifier)     <-   buildEditor okCancelFields ()
-    registerEvent notifier Clicked (Left (\e -> do
-            case eventPaneName e of
+    registerEvent notifier ButtonPressed (\e -> do
+            case eventText e of
                 "Ok"    ->  dialogResponse dia ResponseOk
                 _       ->  dialogResponse dia ResponseCancel
-            return e))
+            return e)
     boxPackStart upper widget PackGrow 7
     boxPackStart lower widget2 PackNatural 7
     widgetShowAll dia
@@ -650,7 +650,7 @@ groupNameDialog parent =  liftIO $ do
                             $ emptyParams)
                     id
                     (\ a b -> a)
-            (stringEditor (\s -> True))]
+            (stringEditor (const True) True)]
 
 viewNest :: PaneMonad alpha => String -> alpha ()
 viewNest group = do

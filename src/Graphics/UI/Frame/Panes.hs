@@ -44,6 +44,8 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Typeable
 import Control.Monad.Trans
+import Graphics.UI.Editor.Basics
+       (Connection(..), Connection, Connections)
 
 -- ---------------------------------------------------------------------
 -- Panes and pane layout
@@ -201,13 +203,6 @@ instance Show Connection where
 
 instance Show Notebook where
     show _ = "a Notebook"
-
---
--- | Signal handlers for the different pane types
---
-data Connection =  forall alpha . GObjectClass alpha => ConnectC (ConnectId alpha)
-
-type Connections = [Connection]
 
 signalDisconnectAll :: Connections -> IO ()
 signalDisconnectAll = mapM_ (\ (ConnectC s) -> signalDisconnect s)
