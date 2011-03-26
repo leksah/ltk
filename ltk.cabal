@@ -12,7 +12,7 @@ build-depends: Cabal >=1.6.0 && <1.11, base >=4.0.0.0 && <4.4,
                mtl >=1.1.0.2 && <2.1, parsec >=2.1.0.1 && <2.2,
                pretty >=1.0.1.0 && <1.1,
                -- Make sure we get the Cabal compaitble with ghc and haddock
-               haddock <3, ghc <7.3
+               haddock <2.10, ghc <7.3
 stability:
 homepage: http://www.leksah.org
 package-url: http://code.haskell.org/ltk
