@@ -56,6 +56,7 @@ import Data.Version (Version(..))
 import MyMissing (forceJust)
 import qualified Graphics.UI.Gtk.Gdk.Events as Gtk (Event(..))
 import Unsafe.Coerce (unsafeCoerce)
+import Debug.Trace (trace)
 
 --
 -- | An editor which composes two subeditors
@@ -288,15 +289,12 @@ maybeEditor (childEdit, childParams) positive boolLabel parameters notifier = do
                                     widgetHideAll childWidget
                             else do
                                 hasChild <- hasChildEditor childRef
-                                if hasChild
-                                    then do
-                                        (childWidget,_,_) <- getChildEditor childRef childEdit childParams cNoti
-                                        widgetShowAll childWidget
-                                    else do
-                                        (childWidget,inj2,_) <- getChildEditor childRef childEdit childParams cNoti
-                                        boxPackEnd vBox childWidget PackNatural 0
-                                        inj2 getDefault
-                                        widgetShowAll childWidget
+                                (childWidget,inj2,ext2) <- getChildEditor childRef childEdit childParams cNoti
+                                children <- containerGetChildren vBox
+                                unless (elem childWidget children) $
+                                    boxPackEnd vBox childWidget PackNatural 0
+                                inj2 getDefault
+                                widgetShowAll childWidget
                     Nothing -> return ()
                 return (event {gtkReturn=True})
     getChildEditor childRef childEditor childParams cNoti =  do
