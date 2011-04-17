@@ -1,5 +1,5 @@
 name: ltk
-version: 0.10.0
+version: 0.10.0.3
 cabal-version: -any
 build-type: Simple
 license: GPL
@@ -21,7 +21,7 @@ synopsis: Leksah tool kit
 description: UI Framework used by leksah
 category: GUI
 author: Juergen "jutaro" Nicklisch-Franken
-tested-with: GHC ==6.10 || ==6.12
+tested-with: GHC ==6.10 || ==6.12 || ==7.0
 data-files:
 data-dir: ""
 extra-source-files:
