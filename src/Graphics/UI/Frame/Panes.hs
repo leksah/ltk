@@ -43,9 +43,9 @@ import Data.Maybe
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Typeable
-import Control.Monad.Trans
 import Graphics.UI.Editor.Basics
        (Connection(..), Connection, Connections)
+import Control.Monad.IO.Class (MonadIO)
 
 -- ---------------------------------------------------------------------
 -- Panes and pane layout

@@ -90,7 +90,6 @@ module Graphics.UI.Frame.ViewFrame (
 ) where
 
 import Graphics.UI.Gtk hiding (afterToggleOverwrite,onToggleOverwrite)
-import Control.Monad.Reader
 import qualified Data.Map as Map
 import Data.List
 import Data.Maybe
@@ -122,6 +121,9 @@ import Graphics.UI.Editor.Basics
 import qualified Data.Set as  Set (unions, member)
 import Data.Set (Set(..))
 import Graphics.UI.Gtk.Gdk.Events (Event(..))
+import Control.Monad.IO.Class (MonadIO(..))
+import Control.Monad (when, liftM, foldM)
+import qualified Control.Monad.Reader as Gtk (liftIO)
 
 --import Debug.Trace (trace)
 trace a b = b
@@ -1021,7 +1023,7 @@ newNotebook pp = do
             case mbText of
                 Nothing -> return ()
                 Just str -> do
-                    liftIO $ func (str,nb)
+                    Gtk.liftIO $ func (str,nb)
                     return ()
 
 terminalsWithPanePath :: PaneLayout -> [(PanePath,PaneLayout)]
