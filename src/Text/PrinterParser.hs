@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -XTypeSynonymInstances #-}
+{-# OPTIONS_GHC -XTypeSynonymInstances -XFlexibleInstances #-}
 --
 -- | Module for saving and restoring preferences and settings
 --
