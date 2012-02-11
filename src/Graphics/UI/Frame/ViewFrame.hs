@@ -4,7 +4,8 @@
     -XFlexibleInstances
     -XMultiParamTypeClasses
     -XUndecidableInstances
-    -XDeriveDataTypeable #-}
+    -XDeriveDataTypeable
+    -XBangPatterns #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  IDE.Core.ViewFrame
