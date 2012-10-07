@@ -240,7 +240,7 @@ maybeEditor (childEdit, childParams) positive boolLabel parameters notifier = do
                                 then do
                                     (childWidget,_,_) <- getChildEditor childRef childEdit childParams cNoti
                                     inj1 (not positive)
-                                    widgetHideAll childWidget
+                                    widgetHide childWidget
                                 else inj1 (not positive)
                         Just val ->
                             if hasChild
@@ -286,7 +286,7 @@ maybeEditor (childEdit, childParams) positive boolLabel parameters notifier = do
                                 hasChild <- hasChildEditor childRef
                                 when hasChild $ do
                                     (childWidget,_,_) <- getChildEditor childRef childEdit childParams cNoti
-                                    widgetHideAll childWidget
+                                    widgetHide childWidget
                             else do
                                 hasChild <- hasChildEditor childRef
                                 (childWidget,inj2,ext2) <- getChildEditor childRef childEdit childParams cNoti

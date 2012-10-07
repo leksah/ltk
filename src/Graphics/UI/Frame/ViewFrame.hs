@@ -48,6 +48,10 @@ module Graphics.UI.Frame.ViewFrame (
 ,   viewNest'
 ,   viewDetach
 ,   viewDetach'
+,   viewFullScreen
+,   viewExitFullScreen
+,   viewDark
+,   viewLight
 ,   handleNotebookSwitch
 ,   viewCollapse
 ,   viewCollapse'
@@ -124,6 +128,7 @@ import Data.Set (Set(..))
 import Graphics.UI.Gtk.Gdk.Events (Event(..))
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad (when, liftM, foldM)
+import Control.Applicative ((<$>))
 import qualified Control.Monad.Reader as Gtk (liftIO)
 
 --import Debug.Trace (trace)
@@ -221,37 +226,40 @@ notebookInsertOrdered nb widget labelStr mbLabel isGroup = do
 -- | Returns a label box
 mkLabelBox :: PaneMonad alpha => Label -> String -> alpha EventBox
 mkLabelBox lbl paneName = do
-    (tb,lb) <- liftIO $ do
+    lb <- liftIO $ do
         miscSetAlignment (castToMisc lbl) 0.0 0.0
         miscSetPadding  (castToMisc lbl) 0 0
 
         labelBox  <- eventBoxNew
         eventBoxSetVisibleWindow labelBox False
-        innerBox  <- hBoxNew False 0
+-- This is disabled for now as it conflicts with Gtk3 themes a bit.
+-- TODO : We need to fix it or find an alternative.
+--        innerBox  <- hBoxNew False 0
 
-        tabButton <- buttonNew
-        widgetSetName tabButton "leksah-close-button"
-        buttonSetFocusOnClick tabButton False
-        buttonSetRelief tabButton ReliefNone
-        buttonSetAlignment tabButton (0.0,0.0)
+--        tabButton <- buttonNew
+--        widgetSetName tabButton "leksah-close-button"
+--        buttonSetFocusOnClick tabButton False
+--        buttonSetRelief tabButton ReliefNone
+--        buttonSetAlignment tabButton (0.0,0.0)
 
-        image     <- imageNewFromStock stockClose IconSizeMenu
-        mbPB <- widgetRenderIcon tabButton stockClose IconSizeMenu ""
-        (height,width)   <-  case mbPB of
-                                Nothing -> return (14,14)
-                                Just pb -> do
-                                h <- pixbufGetHeight pb
-                                w <- pixbufGetWidth pb
-                                return (h,w)
-        on tabButton styleSet (\style -> do
-            widgetSetSizeRequest tabButton (height + 2) (width + 2))
-        containerSetBorderWidth tabButton 0
-        containerAdd tabButton image
+--        image     <- imageNewFromStock stockClose IconSizeMenu
+--        mbPB <- widgetRenderIcon tabButton stockClose IconSizeMenu ""
+--        (height,width)   <-  case mbPB of
+--                                Nothing -> return (14,14)
+--                                Just pb -> do
+--                                h <- pixbufGetHeight pb
+--                                w <- pixbufGetWidth pb
+--                                return (h,w)
+--        on tabButton styleSet (\style -> do
+--            widgetSetSizeRequest tabButton (height + 2) (width + 2))
+--        containerSetBorderWidth tabButton 0
+--        containerAdd tabButton image
+--
+--        boxPackStart innerBox lbl PackNatural 0
+--        boxPackEnd innerBox tabButton PackNatural 0
 
-        boxPackStart innerBox lbl PackNatural 0
-        boxPackEnd innerBox tabButton PackNatural 0
-
-        containerAdd labelBox innerBox
+--        containerAdd labelBox innerBox
+        containerAdd labelBox lbl
         dragSourceSet labelBox [Button1] [ActionCopy,ActionMove]
         tl        <- targetListNew
         targetListAddTextTargets tl 0
@@ -259,9 +267,10 @@ mkLabelBox lbl paneName = do
         on labelBox dragDataGet (\ cont id timeStamp -> do
             selectionDataSetText paneName
             return ())
-        return (tabButton,labelBox)
-    cl <- runInIO closeHandler
-    liftIO $ onClicked tb (cl ())
+--        return (tabButton,labelBox)
+        return labelBox
+--    cl <- runInIO closeHandler
+--    liftIO $ onClicked tb (cl ())
 
     return lb
     where
@@ -290,12 +299,12 @@ markLabel nb topWidget modified = do
     case mbBox of
         Nothing  -> return ()
         Just box -> do
-            mbContainer <- binGetChild (castToBin box)
-            case mbContainer of
+            mbLabel <- binGetChild (castToBin box)
+            case mbLabel of
                 Nothing -> return ()
-                Just container -> do
-                    children <- containerGetChildren container
-                    let label = castToLabel $ forceHead children "ViewFrame>>markLabel: empty children"
+                Just label -> do
+--                    children <- containerGetChildren container
+--                    let label = castToLabel $ forceHead children "ViewFrame>>markLabel: empty children"
                     text <- widgetGetName topWidget
                     labelSetUseMarkup (castToLabel label) True
                     labelSetMarkup (castToLabel label)
@@ -627,8 +636,8 @@ groupNameDialog parent =  liftIO $ do
     dia                        <-   dialogNew
     windowSetTransientFor dia parent
     windowSetTitle dia "Enter group name"
-    upper                      <-   dialogGetUpper dia
-    lower                      <-   dialogGetActionArea dia
+    upper                      <-   castToVBox <$> dialogGetContentArea dia
+    lower                      <-   castToHBox <$> dialogGetActionArea dia
     (widget,inj,ext,_)         <-   buildEditor moduleFields ""
     (widget2,_,_,notifier)     <-   buildEditor okCancelFields ()
     registerEvent notifier ButtonPressed (\e -> do
@@ -746,7 +755,8 @@ viewDetach' panePath id = do
                             Just (width, height) -> do
                                 windowSetDefaultSize window width height
                             Nothing -> do
-                                (curWidth, curHeight) <- widgetGetSize activeNotebook
+                                curWidth  <- widgetGetAllocatedWidth  activeNotebook
+                                curHeight <- widgetGetAllocatedHeight activeNotebook
                                 windowSetDefaultSize window curWidth curHeight
                         containerRemove (castToContainer parent) activeNotebook
                         containerAdd window activeNotebook
@@ -787,6 +797,62 @@ handleReattach windowId window _ = do
             return False -- "now destroy the window"
 
 
+getActiveWindow :: PaneMonad alpha => alpha (Maybe Window)
+getActiveWindow = do
+    mbPanePath <- getActivePanePath
+    case mbPanePath of
+        Nothing -> return Nothing
+        Just panePath -> do
+            activeNotebook  <- (getNotebook' "getActiveWindow") panePath
+            top <- liftIO $ widgetGetToplevel activeNotebook
+            if (top `isA` gTypeWindow)
+                then return . Just $ castToWindow top
+                else return Nothing
+
+getActiveScreen :: PaneMonad alpha => alpha (Maybe Screen)
+getActiveScreen = do
+    mbWindow <- getActiveWindow
+    case mbWindow of
+        Nothing -> return Nothing
+        Just window -> liftIO $ Just <$> windowGetScreen window
+
+getActiveSettings :: PaneMonad alpha => alpha (Maybe Settings)
+getActiveSettings = do
+    mbScreen <- getActiveScreen
+    case mbScreen of
+        Nothing -> return Nothing
+        Just screen -> liftIO $ Just <$> settingsGetForScreen screen
+
+viewFullScreen :: PaneMonad alpha => alpha ()
+viewFullScreen = do
+    mbWindow <- getActiveWindow
+    case mbWindow of
+        Nothing -> return ()
+        Just window -> liftIO $ windowFullscreen window
+
+viewExitFullScreen :: PaneMonad alpha => alpha ()
+viewExitFullScreen = do
+    mbWindow <- getActiveWindow
+    case mbWindow of
+        Nothing -> return ()
+        Just window -> liftIO $ windowUnfullscreen window
+
+viewDark :: PaneMonad alpha => alpha ()
+viewDark = setDark True
+
+viewLight :: PaneMonad alpha => alpha ()
+viewLight = setDark False
+
+setDark :: PaneMonad alpha => Bool -> alpha ()
+setDark dark = do
+    mbSettings <- getActiveSettings
+    case mbSettings of
+        Just settings -> liftIO $ settingsSetLongProperty
+                            settings
+                            "gtk-application-prefer-dark-theme"
+                            (if dark then 1 else 0)
+                            "Leksah"
+        Nothing -> return ()
 
 groupMenuLabel :: PaneMonad beta => String -> beta (Maybe Label)
 groupMenuLabel group = liftM Just (liftIO $ labelNew (Just group))
