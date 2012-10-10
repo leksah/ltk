@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -XTypeSynonymInstances -XFlexibleInstances #-}
+{-# LANGUAGE TypeSynonymInstances, FlexibleInstances, ScopedTypeVariables #-}
 --
 -- | Module for saving and restoring preferences and settings
 --
@@ -49,6 +49,7 @@ import Graphics.UI.Gtk (Color(..))
 import Data.List (foldl')
 import qualified Text.ParserCombinators.Parsec as  P
     ((<?>), CharParser(..), parseFromFile)
+import Control.Exception as E (catch, IOException)
 
 
 type Printer beta       =   beta -> PP.Doc
@@ -227,12 +228,12 @@ showFields date dateDesc = PP.render $
     foldl' (\ doc (FDS _ printer _) ->  doc PP.$+$ printer date) PP.empty dateDesc
 
 readFields :: FilePath -> [FieldDescriptionS alpha] -> alpha -> IO alpha
-readFields fn fieldDescrs defaultValue = catch (do
+readFields fn fieldDescrs defaultValue = E.catch (do
     res <- P.parseFromFile (parseFields defaultValue fieldDescrs) fn
     case res of
                 Left pe -> error $ "Error reading file " ++ show fn ++ " " ++ show pe
                 Right r -> return r)
-    (\ e -> error $ "Error reading file " ++ show fn ++ " " ++ show e)
+    (\ (e::IOException) -> error $ "Error reading file " ++ show fn ++ " " ++ show e)
 
 parseFields ::  alpha ->  [FieldDescriptionS alpha] ->  P.CharParser () alpha
 parseFields defaultValue descriptions =

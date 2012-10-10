@@ -63,6 +63,7 @@ import Unsafe.Coerce (unsafeCoerce)
 import Graphics.UI.Editor.Basics
        (GUIEvent(..), GUIEventSelector(..), propagateAsChanged,
         genericGUIEvents, activateEvent, Editor)
+import Control.Exception as E (catch, IOException)
 
 -- ------------------------------------------------------------
 -- * Simple Editors
@@ -359,8 +360,8 @@ genericEditor parameters notifier = do
         s <- ext
         case s of
             Nothing -> return Nothing
-            Just s -> catch (liftM Just (readIO s))
-                            (\e -> do
+            Just s -> E.catch (liftM Just (readIO s))
+                            (\(e :: IOException) -> do
                                 putStrLn ("Generic editor no parse for " ++ s ++ " " ++ show e)
                                 return Nothing)
     return (wid,ginj,gext)
