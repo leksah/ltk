@@ -755,8 +755,12 @@ viewDetach' panePath id = do
                             Just (width, height) -> do
                                 windowSetDefaultSize window width height
                             Nothing -> do
+#ifdef GTK3
                                 curWidth  <- widgetGetAllocatedWidth  activeNotebook
                                 curHeight <- widgetGetAllocatedHeight activeNotebook
+#else
+                                (Rectangle _ _ curWidth curHeight) <- widgetGetAllocation activeNotebook
+#endif
                                 windowSetDefaultSize window curWidth curHeight
                         containerRemove (castToContainer parent) activeNotebook
                         containerAdd window activeNotebook
