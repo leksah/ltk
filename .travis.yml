@@ -1,7 +1,6 @@
 language: "haskell"
-install:
-  - cabal install gtk2hs-buildtools
-  - cabal install
+before_script: travis/gtk.sh
+install:cabal install
 notifications:
   irc:
     channels: "irc.freenode.net#leksah"
