@@ -1,6 +1,6 @@
 language: "haskell"
-before_script: travis/gtk.sh
-install:cabal install
+before_install: travis/gtk.sh
+install: cabal install
 notifications:
   irc:
     channels: "irc.freenode.net#leksah"
