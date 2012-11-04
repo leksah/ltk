@@ -1,6 +1,2 @@
-./gtk2hs/glib
-./gtk2hs/gio
-./gtk2hs/cairo
-./gtk2hs/pango
-./gtk2hs/gtk -fgtk3
+darcs:http://patch-tag.com/r/hamish/gtk2hs
 ./
