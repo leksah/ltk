@@ -1,5 +1,7 @@
 language: "haskell"
-install:  "cabal install"
+install:
+  - cabal install gtk2hs-buildtools
+  - cabal install
 notifications:
   irc:
     channels: "irc.freenode.net#leksah"
