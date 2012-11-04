@@ -1,5 +1,5 @@
 language: "haskell"
-install: "cabal install"
+install:  "cabal install"
 notifications:
   irc:
     channels: "irc.freenode.net#leksah"
