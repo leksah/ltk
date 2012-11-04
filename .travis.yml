@@ -1,0 +1,7 @@
+language: "haskell"
+install: "cabal install"
+notifications:
+  irc:
+    channels: "irc.freenode.net#leksah"
+    skip_join: true
+  email: true
