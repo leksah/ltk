@@ -146,10 +146,14 @@ initGtkRc :: IO ()
 #if MIN_VERSION_gtk(0,11,0)
 initGtkRc = rcParseString ("style \"leksah-close-button-style\"\n" ++
     "{\n" ++
+    "  GtkButton::default-border = 0\n" ++
+    "  GtkButton::default-outside-border = 0\n" ++
+    "  GtkButton::inner-border = 0\n" ++
     "  GtkWidget::focus-padding = 0\n" ++
     "  GtkWidget::focus-line-width = 0\n" ++
     "  xthickness = 0\n" ++
     "  ythickness = 0\n" ++
+    "  padding = 0\n" ++
     "}\n" ++
     "widget \"*.leksah-close-button\" style \"leksah-close-button-style\"")
 #else
@@ -226,40 +230,37 @@ notebookInsertOrdered nb widget labelStr mbLabel isGroup = do
 -- | Returns a label box
 mkLabelBox :: PaneMonad alpha => Label -> String -> alpha EventBox
 mkLabelBox lbl paneName = do
-    lb <- liftIO $ do
+    (tb,lb) <- liftIO $ do
         miscSetAlignment (castToMisc lbl) 0.0 0.0
         miscSetPadding  (castToMisc lbl) 0 0
 
         labelBox  <- eventBoxNew
         eventBoxSetVisibleWindow labelBox False
--- This is disabled for now as it conflicts with Gtk3 themes a bit.
--- TODO : We need to fix it or find an alternative.
---        innerBox  <- hBoxNew False 0
+        innerBox  <- hBoxNew False 0
 
---        tabButton <- buttonNew
---        widgetSetName tabButton "leksah-close-button"
---        buttonSetFocusOnClick tabButton False
---        buttonSetRelief tabButton ReliefNone
---        buttonSetAlignment tabButton (0.0,0.0)
+        tabButton <- buttonNew
+        widgetSetName tabButton "leksah-close-button"
+        buttonSetFocusOnClick tabButton False
+        buttonSetRelief tabButton ReliefNone
+        buttonSetAlignment tabButton (0.0,0.0)
 
---        image     <- imageNewFromStock stockClose IconSizeMenu
---        mbPB <- widgetRenderIcon tabButton stockClose IconSizeMenu ""
---        (height,width)   <-  case mbPB of
---                                Nothing -> return (14,14)
---                                Just pb -> do
---                                h <- pixbufGetHeight pb
---                                w <- pixbufGetWidth pb
---                                return (h,w)
---        on tabButton styleSet (\style -> do
---            widgetSetSizeRequest tabButton (height + 2) (width + 2))
---        containerSetBorderWidth tabButton 0
---        containerAdd tabButton image
---
---        boxPackStart innerBox lbl PackNatural 0
---        boxPackEnd innerBox tabButton PackNatural 0
+        image     <- imageNewFromStock stockClose IconSizeMenu
+        mbPB <- widgetRenderIcon tabButton stockClose IconSizeMenu ""
+        (height,width) <- case mbPB of
+                                Nothing -> return (14,14)
+                                Just pb -> do
+                                h <- pixbufGetHeight pb
+                                w <- pixbufGetWidth pb
+                                return (h,w)
+        on tabButton styleSet (\style -> do
+            widgetSetSizeRequest tabButton (height + 2) (width + 2))
+        containerSetBorderWidth tabButton 0
+        containerAdd tabButton image
 
---        containerAdd labelBox innerBox
-        containerAdd labelBox lbl
+        boxPackStart innerBox lbl PackNatural 0
+        boxPackEnd innerBox tabButton PackNatural 0
+
+        containerAdd labelBox innerBox
         dragSourceSet labelBox [Button1] [ActionCopy,ActionMove]
         tl        <- targetListNew
         targetListAddTextTargets tl 0
@@ -267,10 +268,9 @@ mkLabelBox lbl paneName = do
         on labelBox dragDataGet (\ cont id timeStamp -> do
             selectionDataSetText paneName
             return ())
---        return (tabButton,labelBox)
-        return labelBox
---    cl <- runInIO closeHandler
---    liftIO $ onClicked tb (cl ())
+        return (tabButton,labelBox)
+    cl <- runInIO closeHandler
+    liftIO $ onClicked tb (cl ())
 
     return lb
     where
@@ -299,12 +299,12 @@ markLabel nb topWidget modified = do
     case mbBox of
         Nothing  -> return ()
         Just box -> do
-            mbLabel <- binGetChild (castToBin box)
-            case mbLabel of
+            mbContainer <- binGetChild (castToBin box)
+            case mbContainer of
                 Nothing -> return ()
-                Just label -> do
---                    children <- containerGetChildren container
---                    let label = castToLabel $ forceHead children "ViewFrame>>markLabel: empty children"
+                Just container -> do
+                    children <- containerGetChildren container
+                    let label = castToLabel $ forceHead children "ViewFrame>>markLabel: empty children"
                     text <- widgetGetName topWidget
                     labelSetUseMarkup (castToLabel label) True
                     labelSetMarkup (castToLabel label)
