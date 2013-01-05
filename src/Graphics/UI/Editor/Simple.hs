@@ -519,6 +519,9 @@ staticListMultiEditor list showF parameters notifier = do
                     containerAdd sw listView
                     scrolledWindowSetPolicy sw PolicyAutomatic PolicyAutomatic
                     containerAdd widget sw
+#ifdef GTK3
+                    scrolledWindowSetMinContentHeight sw (snd minSize)
+#endif
                       -- update the model when the toggle buttons are activated
                     on rendererToggle cellToggled $ \pathStr -> do
                         let (i:_) = stringToTreePath pathStr
@@ -586,6 +589,9 @@ staticListEditor list showF parameters notifier = do
                     containerAdd sw listView
                     scrolledWindowSetPolicy sw PolicyAutomatic PolicyAutomatic
                     containerAdd widget sw
+#ifdef GTK3
+                    scrolledWindowSetMinContentHeight sw (snd minSize)
+#endif
                     treeSelectionUnselectAll sel
                     let mbInd = elemIndex obj list
                     case mbInd of
