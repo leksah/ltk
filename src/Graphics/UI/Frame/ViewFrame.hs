@@ -115,6 +115,10 @@ import Graphics.UI.Gtk.Gdk.EventM (Modifier(..))
 #else
 import Graphics.UI.Gtk.Gdk.Enums (Modifier(..))
 #endif
+#ifdef GTK3
+import Graphics.UI.Gtk.General.CssProvider (cssProviderNew, cssProviderLoadFromString)
+import Graphics.UI.Gtk.General.StyleContext (styleContextAddProvider)
+#endif
 import MyMissing
 import Graphics.UI.Gtk.Gdk.EventM (TimeStamp(..))
 import Graphics.UI.Editor.MakeEditor
@@ -143,7 +147,7 @@ withoutGroupPrefix s = case groupPrefix `stripPrefix` s of
 
 
 initGtkRc :: IO ()
-#if MIN_VERSION_gtk(0,11,0)
+#if MIN_VERSION_gtk(0,11,0) && !defined(GTK3)
 initGtkRc = rcParseString ("style \"leksah-close-button-style\"\n" ++
     "{\n" ++
     "  GtkButton::default-border = 0\n" ++
@@ -252,6 +256,20 @@ mkLabelBox lbl paneName = do
                                 h <- pixbufGetHeight pb
                                 w <- pixbufGetWidth pb
                                 return (h,w)
+#ifdef GTK3
+        provider <- cssProviderNew
+        cssProviderLoadFromString provider $
+            ".button {\n" ++
+            "-GtkButton-default-border : 0px;\n" ++
+            "-GtkButton-default-outside-border : 0px;\n" ++
+            "-GtkButton-inner-border: 0px;\n" ++
+            "-GtkWidget-focus-line-width : 0px;\n" ++
+            "-GtkWidget-focus-padding : 0px;\n" ++
+            "padding: 0px;\n" ++
+            "}"
+        context <- widgetGetStyleContext tabButton
+        styleContextAddProvider context provider 600
+#endif
         on tabButton styleSet (\style -> do
             widgetSetSizeRequest tabButton (height + 2) (width + 2))
         containerSetBorderWidth tabButton 0
