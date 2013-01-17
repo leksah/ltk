@@ -1020,6 +1020,8 @@ findAppropriate  (VerticalP l r _) TopP        =   SplitP LeftP   :  findAppropr
 bringPaneToFront :: RecoverablePane alpha beta delta => alpha -> IO ()
 bringPaneToFront pane = do
     let tv = getTopWidget pane
+    w <- widgetGetToplevel tv
+    windowPresent (castToWindow w)
     setCurrentNotebookPages tv
 
 
