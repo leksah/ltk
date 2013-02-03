@@ -777,6 +777,9 @@ versionRangeEditor para noti = do
             (paraDirection <<<- ParaDirection Vertical $ para)
             noti
     let vrinj AnyVersion                =   inj Nothing
+#if MIN_VERSION_Cabal(1,8,0)
+        vrinj (WildcardVersion v)       =   inj (Just (Left (WildcardVersionS,v)))
+#endif
         vrinj (ThisVersion v)           =   inj (Just (Left (ThisVersionS,v)))
         vrinj (LaterVersion v)          =   inj (Just (Left (LaterVersionS,v)))
         vrinj (EarlierVersion v)        =   inj (Just (Left (EarlierVersionS,v)))
@@ -796,6 +799,9 @@ versionRangeEditor para noti = do
                         Nothing -> return (Just AnyVersion)
                         Just Nothing -> return (Just AnyVersion)
                         Just (Just (Left (ThisVersionS,v)))     -> return (Just (ThisVersion v))
+#if MIN_VERSION_Cabal(1,8,0)
+                        Just (Just (Left (WildcardVersionS,v)))     -> return (Just (WildcardVersion v))
+#endif
                         Just (Just (Left (LaterVersionS,v)))    -> return (Just (LaterVersion v))
                         Just (Just (Left (EarlierVersionS,v)))   -> return (Just (EarlierVersion v))
 
@@ -807,13 +813,18 @@ versionRangeEditor para noti = do
                                                         -> return (Just (IntersectVersionRanges v1 v2))
     return (wid,vrinj,vrext)
         where
+#if MIN_VERSION_Cabal(1,8,0)
+            v1 = [ThisVersionS,WildcardVersionS,LaterVersionS,ThisOrLaterVersionS,EarlierVersionS,ThisOrEarlierVersionS]
+#else
             v1 = [ThisVersionS,LaterVersionS,ThisOrLaterVersionS,EarlierVersionS,ThisOrEarlierVersionS]
+#endif
             v2 = [UnionVersionRangesS,IntersectVersionRangesS]
 
-data Version1 = ThisVersionS | LaterVersionS | ThisOrLaterVersionS | EarlierVersionS | ThisOrEarlierVersionS
+data Version1 = ThisVersionS | WildcardVersionS | LaterVersionS | ThisOrLaterVersionS | EarlierVersionS | ThisOrEarlierVersionS
     deriving (Eq)
 instance Show Version1 where
     show ThisVersionS   =  "This Version"
+    show WildcardVersionS   =  "Wildcard Version"
     show LaterVersionS  =  "Later Version"
     show ThisOrLaterVersionS = "This or later Version"
     show EarlierVersionS =  "Earlier Version"
