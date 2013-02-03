@@ -36,12 +36,7 @@ module Graphics.UI.Editor.Simple (
 ,   okCancelFields
 ) where
 
-#if MIN_VERSION_gtk(0,10,5)
-import Graphics.UI.Gtk hiding (eventKeyName, eventModifier)
-#else
 import Graphics.UI.Gtk
-#endif
-import qualified Graphics.UI.Gtk as Gtk
 import Control.Monad
 import Data.IORef
 import Data.List
@@ -52,11 +47,6 @@ import Graphics.UI.Editor.Parameters
 --import Graphics.UI.Editor.Basics
 import Graphics.UI.Editor.MakeEditor
 import Control.Event
-#if MIN_VERSION_gtk(0,10,5)
-import Graphics.UI.Gtk.Gdk.Events (Event(..))
-#else
-import Graphics.UI.Gtk.Gdk.Events (Event(..))
-#endif
 import MyMissing (trim, allOf)
 import qualified Graphics.UI.Gtk.Gdk.Events as Gtk (Event(..))
 import Unsafe.Coerce (unsafeCoerce)
@@ -64,6 +54,7 @@ import Graphics.UI.Editor.Basics
        (GUIEvent(..), GUIEventSelector(..), propagateAsChanged,
         genericGUIEvents, activateEvent, Editor)
 import Control.Exception as E (catch, IOException)
+import Control.Monad.IO.Class (MonadIO(..))
 
 -- ------------------------------------------------------------
 -- * Simple Editors
@@ -527,17 +518,18 @@ staticListMultiEditor list showF parameters notifier = do
                         let (i:_) = stringToTreePath pathStr
                         val <- listStoreGetValue listStore i
                         listStoreSetValue listStore i (not (fst val),snd val)
-                    listView `onKeyPress` (\event -> do
-                        let Key { eventKeyName = name, eventModifier = modifier, eventKeyChar = char } = event
-                        case (name, modifier, char) of
-                            ("Return", _, _) -> do
-                                sel <- treeViewGetSelection listView
-                                rows <- treeSelectionGetSelectedRows sel
-                                mapM_ (\ (i:_) -> do
-                                    val <- listStoreGetValue listStore i
-                                    listStoreSetValue listStore i (not (fst val),snd val)) rows
-                                return True
-                            _ -> return False)
+                    listView `on` keyPressEvent $ do
+                        name <- eventKeyName
+                        liftIO $ do
+                            case name of
+                                "Return" -> do
+                                    sel <- treeViewGetSelection listView
+                                    rows <- treeSelectionGetSelectedRows sel
+                                    mapM_ (\ (i:_) -> do
+                                        val <- listStoreGetValue listStore i
+                                        listStoreSetValue listStore i (not (fst val),snd val)) rows
+                                    return True
+                                _ -> return False
                     writeIORef coreRef (Just (listView,listStore))
                 Just (listView,listStore) -> do
                     let model = map (\e -> (elem e objs,e)) list
