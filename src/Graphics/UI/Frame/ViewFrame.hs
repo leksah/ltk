@@ -1021,7 +1021,8 @@ bringPaneToFront :: RecoverablePane alpha beta delta => alpha -> IO ()
 bringPaneToFront pane = do
     let tv = getTopWidget pane
     w <- widgetGetToplevel tv
-    windowPresent (castToWindow w)
+    visible <- w `get` widgetVisible
+    when visible . windowPresent $ castToWindow w
     setCurrentNotebookPages tv
 
 
