@@ -115,7 +115,7 @@ import Graphics.UI.Gtk.Gdk.EventM (Modifier(..))
 #else
 import Graphics.UI.Gtk.Gdk.Enums (Modifier(..))
 #endif
-#ifdef GTK3
+#if MIN_VERSION_gtk(3,0,0)
 import Graphics.UI.Gtk.General.CssProvider (cssProviderNew, cssProviderLoadFromString)
 import Graphics.UI.Gtk.General.StyleContext (styleContextAddProvider)
 #endif
@@ -147,7 +147,7 @@ withoutGroupPrefix s = case groupPrefix `stripPrefix` s of
 
 
 initGtkRc :: IO ()
-#if MIN_VERSION_gtk(0,11,0) && !defined(GTK3)
+#if MIN_VERSION_gtk(0,11,0) && !MIN_VERSION_gtk(3,0,0)
 initGtkRc = rcParseString ("style \"leksah-close-button-style\"\n" ++
     "{\n" ++
     "  GtkButton::default-border = 0\n" ++
@@ -256,7 +256,7 @@ mkLabelBox lbl paneName = do
                                 h <- pixbufGetHeight pb
                                 w <- pixbufGetWidth pb
                                 return (h,w)
-#ifdef GTK3
+#if MIN_VERSION_gtk(3,0,0)
         provider <- cssProviderNew
         cssProviderLoadFromString provider $
             ".button {\n" ++

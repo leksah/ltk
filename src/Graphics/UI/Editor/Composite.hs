@@ -597,7 +597,7 @@ multisetEditor (ColumnDescr showHeaders columnsDD) (singleEditor, sParams) mbSor
                     sw          <-  scrolledWindowNew Nothing Nothing
                     containerAdd sw treeView
                     scrolledWindowSetPolicy sw PolicyAutomatic PolicyAutomatic
-#ifdef GTK3
+#if MIN_VERSION_gtk(3,0,0)
                     scrolledWindowSetMinContentHeight sw (snd minSize)
 #endif
                     sel         <-  treeViewGetSelection treeView

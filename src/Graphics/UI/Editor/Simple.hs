@@ -510,7 +510,7 @@ staticListMultiEditor list showF parameters notifier = do
                     containerAdd sw listView
                     scrolledWindowSetPolicy sw PolicyAutomatic PolicyAutomatic
                     containerAdd widget sw
-#ifdef GTK3
+#if MIN_VERSION_gtk(3,0,0)
                     scrolledWindowSetMinContentHeight sw (snd minSize)
 #endif
                       -- update the model when the toggle buttons are activated
@@ -581,7 +581,7 @@ staticListEditor list showF parameters notifier = do
                     containerAdd sw listView
                     scrolledWindowSetPolicy sw PolicyAutomatic PolicyAutomatic
                     containerAdd widget sw
-#ifdef GTK3
+#if MIN_VERSION_gtk(3,0,0)
                     scrolledWindowSetMinContentHeight sw (snd minSize)
 #endif
                     treeSelectionUnselectAll sel
