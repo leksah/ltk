@@ -1,2 +1,2 @@
-darcs:http://code.haskell.org/gtk2hs
+darcs:http://patch-tag.com/r/hamish/gtk2hs
 ./

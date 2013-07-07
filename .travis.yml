@@ -4,7 +4,7 @@ before_install:
   - sudo apt-get --no-install-recommends install darcs libgtksourceview-3.0-dev
   - mkdir vendor
   - cd vendor
-  - darcs get --lazy http://code.haskell.org/gtk2hs/
+  - darcs get --lazy http://patch-tag.com/r/hamish/gtk2hs
   - cabal install ./gtk2hs/tools
   - cd ..
 install:
