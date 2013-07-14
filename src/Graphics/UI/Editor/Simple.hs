@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -XScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  Graphics.UI.Editor.Simple
@@ -323,9 +323,7 @@ intEditor (min, max, step) parameters notifier = do
                     mapM_ (activateEvent (castToWidget spin) notifier Nothing) (genericGUIEvents)
                     activateEvent (castToWidget spin) notifier
                         (Just (\ w h -> do
-                            res     <-  afterValueSpinned (castToSpinButton w) (do
-                                h (Gtk.Event True)
-                                return ())
+                            res     <-  afterValueSpinned (castToSpinButton w) (h >> return ())
                             return (unsafeCoerce res))) MayHaveChanged
                     containerAdd widget spin
                     spinButtonSetValue spin (fromIntegral v)
@@ -396,9 +394,7 @@ comboSelectionEditor list showF parameters notifier = do
                     mapM_ (activateEvent (castToWidget combo) notifier Nothing) genericGUIEvents
                     activateEvent (castToWidget combo) notifier
                         (Just (\ w h -> do
-                            res     <-  on (castToComboBox w) changed (do
-                                h (Gtk.Event True)
-                                return ())
+                            res     <-  on (castToComboBox w) changed (h >> return ())
                             return (unsafeCoerce res))) MayHaveChanged
                     comboBoxSetActive combo 1
                     containerAdd widget combo
@@ -510,7 +506,7 @@ staticListMultiEditor list showF parameters notifier = do
                     containerAdd sw listView
                     scrolledWindowSetPolicy sw PolicyAutomatic PolicyAutomatic
                     containerAdd widget sw
-#if MIN_VERSION_gtk(3,0,0)
+#ifdef MIN_VERSION_gtk3
                     scrolledWindowSetMinContentHeight sw (snd minSize)
 #endif
                       -- update the model when the toggle buttons are activated
@@ -581,7 +577,7 @@ staticListEditor list showF parameters notifier = do
                     containerAdd sw listView
                     scrolledWindowSetPolicy sw PolicyAutomatic PolicyAutomatic
                     containerAdd widget sw
-#if MIN_VERSION_gtk(3,0,0)
+#ifdef MIN_VERSION_gtk3
                     scrolledWindowSetMinContentHeight sw (snd minSize)
 #endif
                     treeSelectionUnselectAll sel
@@ -686,7 +682,6 @@ fileEditor mbFilePath action buttonName parameters notifier = do
                 entrySetText entry fn
                 triggerEvent notifier (GUIEvent {
                     selector = MayHaveChanged,
-                    gtkEvent = Gtk.Event True,
                     eventText = "",
                     gtkReturn = True})
                 return (e{gtkReturn=True})
@@ -707,9 +702,7 @@ fontEditor parameters notifier = do
                     mapM_ (activateEvent (castToWidget fs) notifier Nothing) (Clicked: genericGUIEvents)
                     activateEvent (castToWidget fs) notifier
                         (Just (\ w h -> do
-                            res     <-  onFontSet (castToFontButton w)  (do
-                                h (Gtk.Event True)
-                                return ())
+                            res     <-  onFontSet (castToFontButton w) (h >> return ())
                             return (unsafeCoerce res))) MayHaveChanged
                     containerAdd widget fs
                     case mbValue of
@@ -746,9 +739,7 @@ colorEditor parameters notifier = do
                     mapM_ (activateEvent (castToWidget cs) notifier Nothing) (Clicked: genericGUIEvents)
                     activateEvent (castToWidget cs) notifier
                         (Just (\ w h -> do
-                            res     <-  onColorSet (castToColorButton w)  (do
-                                h (Gtk.Event True)
-                                return ())
+                            res     <-  onColorSet (castToColorButton w) (h >> return ())
                             return (unsafeCoerce res))) MayHaveChanged
                     containerAdd widget cs
                     colorButtonSetColor cs c

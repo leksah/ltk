@@ -1,5 +1,5 @@
-{-# OPTIONS_GHC -XMultiParamTypeClasses -XScopedTypeVariables -XFlexibleContexts -XRankNTypes
-    -XExistentialQuantification #-}
+{-# LANGUAGE MultiParamTypeClasses, ScopedTypeVariables, FlexibleContexts, RankNTypes,
+             ExistentialQuantification, TypeFamilies, ImpredicativeTypes #-}
 
 -----------------------------------------------------------------------------
 --
@@ -23,7 +23,6 @@ module Graphics.UI.Editor.Basics (
 ,   Extractor
 ,   Applicator
 ,   Editor
-,   getStandardRegFunction
 ,   emptyNotifier
 ,   GUIEvent(..)
 ,   GUIEventSelector(..)
@@ -41,10 +40,10 @@ module Graphics.UI.Editor.Basics (
 ) where
 
 import Graphics.UI.Gtk
-import qualified Graphics.UI.Gtk.Gdk.Events as Gtk
 import Data.Unique
 import Data.IORef
 import Control.Monad
+import Control.Monad.Trans (liftIO)
 
 import Graphics.UI.Editor.Parameters
 import Control.Event
@@ -93,7 +92,6 @@ type Editor alpha  =   Parameters -> Notifier
 --
 data GUIEvent = GUIEvent {
     selector :: GUIEventSelector
-,   gtkEvent :: Gtk.Event
 ,   eventText :: String
 ,   gtkReturn :: Bool -- ^ True means that the event has been completely handled,
                       --  gtk shoudn't do any further action about it (Often not
@@ -124,7 +122,7 @@ genericGUIEvents = [FocusOut,FocusIn,ButtonPressed,KeyPressed]
 --  | A type for handling an IO event
 --  Returning True: The event has been handles
 --  Returning False: Handling should proceed
-type GtkHandler = Gtk.Event -> IO Bool
+type GtkHandler = IO Bool
 
 --
 -- | A type for a function to register a gtk event
@@ -260,17 +258,17 @@ propagateEvent (Noti pairRef) eventSources eventSel = do
 --
 
 activateEvent
-  :: (GObjectClass o) =>
+  :: GObjectClass o =>
      o
      -> Notifier
-     -> Maybe (o -> GtkHandler -> IO Connection)
+     -> Maybe (o -> IO Bool -> IO Connection)
      -> GUIEventSelector
      -> IO ()
 activateEvent widget (Noti pairRef) mbRegisterFunc eventSel = do
     let registerFunc    =   case mbRegisterFunc of
                                 Just f  ->  f
                                 Nothing ->  getStandardRegFunction eventSel
-    cid <- registerFunc widget (\ e -> do
+    cid <- registerFunc widget (do
                 (hi,_) <- readIORef pairRef
                 case Map.lookup eventSel hi of
                     Nothing -> return False
@@ -280,7 +278,7 @@ activateEvent widget (Noti pairRef) mbRegisterFunc eventSel = do
                                     then widgetGetName (castToWidget widget)
                                     else return "no widget - no name"
                         eventList <- mapM (\f -> do
-                            let ev = GUIEvent eventSel e "" False
+                            let ev = GUIEvent eventSel "" False
                             f ev)
                                 (map snd handlers)
                         let boolList = map gtkReturn eventList
@@ -297,12 +295,11 @@ activateEvent widget (Noti pairRef) mbRegisterFunc eventSel = do
 -- | A convinence method for not repeating this over and over again
 --
 getStandardRegFunction :: GUIEventSelector -> GtkRegFunc
-getStandardRegFunction FocusOut         =   \w h -> liftM ConnectC $ (castToWidget w) `onFocusOut` h
-getStandardRegFunction FocusIn          =   \w h -> liftM ConnectC $ (castToWidget w) `onFocusIn` h
-getStandardRegFunction ButtonPressed    =   \w h -> liftM ConnectC $ (castToWidget w) `afterButtonRelease` h
-getStandardRegFunction KeyPressed       =   \w h -> liftM ConnectC $ (castToWidget w) `afterKeyRelease` h
-getStandardRegFunction Clicked          =   \w h -> liftM ConnectC $ (castToButton w) `onClicked`
-                                                                    (h (Gtk.Event True) >> return ())
+getStandardRegFunction FocusOut         =   \w h -> liftM ConnectC $ on (castToWidget w) focusOutEvent $ liftIO h
+getStandardRegFunction FocusIn          =   \w h -> liftM ConnectC $ on (castToWidget w) focusInEvent $ liftIO h
+getStandardRegFunction ButtonPressed    =   \w h -> liftM ConnectC $ after (castToWidget w) buttonReleaseEvent $ liftIO h
+getStandardRegFunction KeyPressed       =   \w h -> liftM ConnectC $ after (castToWidget w) keyReleaseEvent $ liftIO h
+getStandardRegFunction Clicked          =   \w h -> liftM ConnectC $ on (castToButton w) buttonActivated $ liftIO h >> return ()
 getStandardRegFunction _    =   error "Basic>>getStandardRegFunction: no original GUI event"
 
 registerEvents :: EventSource alpha beta gamma delta => alpha -> [delta] -> (beta -> gamma beta) -> gamma [Maybe Unique]

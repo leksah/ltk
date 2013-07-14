@@ -288,7 +288,7 @@ mkLabelBox lbl paneName = do
             return ())
         return (tabButton,labelBox)
     cl <- runInIO closeHandler
-    liftIO $ onClicked tb (cl ())
+    liftIO $ on tb buttonActivated (cl ())
 
     return lb
     where
@@ -490,7 +490,7 @@ viewSplit' panePath dir = do
                                     _      -> trace ("ViewFrame>>viewSplit': parent not a notebook2: ")return ()
                                 return (nb,paneDir)
                         handleFunc <-  runInIO (handleNotebookSwitch nb)
-                        liftIO $ afterSwitchPage nb handleFunc
+                        liftIO $ after nb switchPage handleFunc
                         return (Just (paneDir,dir))
             case mbPD of
               Just (paneDir,pdir) -> do
@@ -652,8 +652,8 @@ bringGroupToFront groupName = do
 groupNameDialog :: Window -> IO (Maybe String)
 groupNameDialog parent =  liftIO $ do
     dia                        <-   dialogNew
-    windowSetTransientFor dia parent
-    windowSetTitle dia "Enter group name"
+    set dia [ windowTransientFor := parent
+            , windowTitle        := "Enter group name" ]
     upper                      <-   castToVBox <$> dialogGetContentArea dia
     lower                      <-   castToHBox <$> dialogGetActionArea dia
     (widget,inj,ext,_)         <-   buildEditor moduleFields ""
@@ -707,7 +707,7 @@ viewNest' panePath group = do
                     liftIO $ widgetShowAll nb
                         --widgetGrabFocus activeNotebook
                     handleFunc <-  runInIO (handleNotebookSwitch nb)
-                    liftIO $ afterSwitchPage nb handleFunc
+                    liftIO $ after nb switchPage handleFunc
                     adjustLayoutForNest group panePath
                 _ -> return ()
 
@@ -767,8 +767,8 @@ viewDetach' panePath id = do
                 (TerminalP{detachedSize = size}) -> do
                     window <- liftIO $ do
                         window <- windowNew
-                        windowSetTitle window "Leksah detached window"
-                        widgetSetName window id
+                        set window [ windowTitle := "Leksah detached window"
+                                   , widgetName  := Just id ]
                         case size of
                             Just (width, height) -> do
                                 windowSetDefaultSize window width height
@@ -780,7 +780,7 @@ viewDetach' panePath id = do
                         widgetShowAll window
                         return window
                     handleFunc <-  runInIO (handleReattach id window)
-                    liftIO $ window `onDelete` handleFunc
+                    liftIO . on window deleteEvent . liftIO $ handleFunc ()
                     windows <- getWindowsSt
                     setWindowsSt $ windows ++ [window]
                     adjustLayoutForDetach id panePath
@@ -789,7 +789,7 @@ viewDetach' panePath id = do
 
 
 
-handleReattach :: PaneMonad alpha => String -> Window -> Event -> alpha Bool
+handleReattach :: PaneMonad alpha => String -> Window -> () -> alpha Bool
 handleReattach windowId window _ = do
     layout <- getLayout
     case findDetachedPath windowId layout of

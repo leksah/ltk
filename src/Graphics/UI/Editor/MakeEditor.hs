@@ -107,7 +107,7 @@ buildEditor (NFD pairList)     v =   do
     treeViewSetHeadersVisible listView False
     treeSelectionSelectPath sel [0]
     notebookSetCurrentPage nb 0
-    sel `onSelectionChanged` (do
+    on sel treeSelectionSelectionChanged (do
         selections <- treeSelectionGetSelectedRows sel
         case selections of
             [[i]] -> notebookSetCurrentPage nb i
@@ -222,7 +222,6 @@ extractAndValidate val getExts fieldNames notifier = do
         else do
             triggerEvent notifier (GUIEvent {
                     selector = ValidationError,
-                    gtkEvent = GTK.Event True,
                     eventText = concat (intersperse ", " errors),
                     gtkReturn = True})
             return Nothing

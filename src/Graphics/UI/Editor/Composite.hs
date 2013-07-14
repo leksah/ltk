@@ -584,12 +584,12 @@ multisetEditor (ColumnDescr showHeaders columnsDD) (singleEditor, sParams) mbSor
                     activateEvent listStore notifier
                         (Just (\ w h -> do
                             res     <-  after (castToTreeModel w) rowInserted (\ _ _ ->
-                                h (Gtk.Event True) >> return ())
+                                h >> return ())
                             return (ConnectC res))) MayHaveChanged
                     activateEvent listStore notifier
                         (Just (\ w h -> do
                             res     <-  after (castToTreeModel w) rowDeleted (\ _ ->
-                                h (Gtk.Event True) >> return ())
+                                h >> return ())
                             return (ConnectC res))) MayHaveChanged
                     treeView        <-  treeViewNewWithModel listStore
                     let minSize =   getParameter paraMinSize parameters
@@ -597,7 +597,7 @@ multisetEditor (ColumnDescr showHeaders columnsDD) (singleEditor, sParams) mbSor
                     sw          <-  scrolledWindowNew Nothing Nothing
                     containerAdd sw treeView
                     scrolledWindowSetPolicy sw PolicyAutomatic PolicyAutomatic
-#if MIN_VERSION_gtk(3,0,0)
+#ifdef MIN_VERSION_gtk3
                     scrolledWindowSetMinContentHeight sw (snd minSize)
 #endif
                     sel         <-  treeViewGetSelection treeView
@@ -612,7 +612,7 @@ multisetEditor (ColumnDescr showHeaders columnsDD) (singleEditor, sParams) mbSor
                             cellLayoutSetAttributes col renderer listStore func
                         ) columnsDD
                     treeViewSetHeadersVisible treeView showHeaders
-                    sel  `onSelectionChanged` selectionHandler sel listStore injS
+                    on sel treeSelectionSelectionChanged $ selectionHandler sel listStore injS
                     boxPackStart box sw PackGrow 0
                     boxPackStart box buttonBox PackNatural 0
                     boxPackStart box frameS PackNatural 0
@@ -623,7 +623,7 @@ multisetEditor (ColumnDescr showHeaders columnsDD) (singleEditor, sParams) mbSor
                         (case mbSort of
                             Nothing -> vs
                             Just sortF -> sortF vs)
-                    addButton `onClicked` do
+                    on addButton buttonActivated $ do
                         mbv <- extS
                         case mbv of
                             Just v -> do
@@ -653,7 +653,7 @@ multisetEditor (ColumnDescr showHeaders columnsDD) (singleEditor, sParams) mbSor
                                             Just col -> treeViewScrollToCell treeView [idx] col Nothing
                                     Nothing -> return ()
                             Nothing -> return ()
-                    removeButton `onClicked` do
+                    on removeButton buttonActivated $ do
                         mbi <- treeSelectionGetSelected sel
                         case mbi of
                             Nothing -> return ()
