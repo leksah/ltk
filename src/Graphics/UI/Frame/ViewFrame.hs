@@ -94,7 +94,7 @@ module Graphics.UI.Frame.ViewFrame (
 ,   initGtkRc
 ) where
 
-import Graphics.UI.Gtk hiding (afterToggleOverwrite,onToggleOverwrite)
+import Graphics.UI.Gtk
 import qualified Data.Map as Map
 import Data.List
 import Data.Maybe
