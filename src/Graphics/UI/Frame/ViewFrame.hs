@@ -1,11 +1,11 @@
-{-# OPTIONS_GHC
-    -XFunctionalDependencies
-    -XNoMonomorphismRestriction
-    -XFlexibleInstances
-    -XMultiParamTypeClasses
-    -XUndecidableInstances
-    -XDeriveDataTypeable
-    -XBangPatterns #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE BangPatterns #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  IDE.Core.ViewFrame
@@ -104,18 +104,10 @@ import Data.Typeable
 import Graphics.UI.Frame.Panes
 import Graphics.UI.Editor.Parameters
 import System.Glib (GObjectClass(..), isA)
-#if MIN_VERSION_gtk(0,10,5)
 import Graphics.UI.Gtk.Layout.Notebook (gTypeNotebook)
-#else
-import Graphics.UI.Gtk.Types (gTypeNotebook)
-#endif
 import System.CPUTime (getCPUTime)
-#if MIN_VERSION_gtk(0,10,5)
 import Graphics.UI.Gtk.Gdk.EventM (Modifier(..))
-#else
-import Graphics.UI.Gtk.Gdk.Enums (Modifier(..))
-#endif
-#if MIN_VERSION_gtk(3,0,0)
+#ifdef MIN_VERSION_gtk3
 import Graphics.UI.Gtk.General.CssProvider (cssProviderNew, cssProviderLoadFromString)
 import Graphics.UI.Gtk.General.StyleContext (styleContextAddProvider)
 #endif
@@ -147,7 +139,9 @@ withoutGroupPrefix s = case groupPrefix `stripPrefix` s of
 
 
 initGtkRc :: IO ()
-#if MIN_VERSION_gtk(0,11,0) && !MIN_VERSION_gtk(3,0,0)
+#ifdef MIN_VERSION_gtk3
+initGtkRc = return ()
+#else
 initGtkRc = rcParseString ("style \"leksah-close-button-style\"\n" ++
     "{\n" ++
     "  GtkButton::default-border = 0\n" ++
@@ -160,8 +154,6 @@ initGtkRc = rcParseString ("style \"leksah-close-button-style\"\n" ++
     "  padding = 0\n" ++
     "}\n" ++
     "widget \"*.leksah-close-button\" style \"leksah-close-button-style\"")
-#else
-initGtkRc = return ()
 #endif
 
 removePaneAdmin :: RecoverablePane alpha beta delta =>  alpha -> delta ()
@@ -256,7 +248,7 @@ mkLabelBox lbl paneName = do
                                 h <- pixbufGetHeight pb
                                 w <- pixbufGetWidth pb
                                 return (h,w)
-#if MIN_VERSION_gtk(3,0,0)
+#ifdef MIN_VERSION_gtk3
         provider <- cssProviderNew
         cssProviderLoadFromString provider $
             ".button {\n" ++
@@ -654,7 +646,11 @@ groupNameDialog parent =  liftIO $ do
     dia                        <-   dialogNew
     set dia [ windowTransientFor := parent
             , windowTitle        := "Enter group name" ]
+#if MIN_VERSION_gtk(0,13,0) || defined(MIN_VERSION_gtk3)
     upper                      <-   castToVBox <$> dialogGetContentArea dia
+#else
+    upper                      <-   castToVBox <$> dialogGetUpper dia
+#endif
     lower                      <-   castToHBox <$> dialogGetActionArea dia
     (widget,inj,ext,_)         <-   buildEditor moduleFields ""
     (widget2,_,_,notifier)     <-   buildEditor okCancelFields ()
@@ -833,12 +829,14 @@ getActiveScreen = do
         Nothing -> return Nothing
         Just window -> liftIO $ Just <$> windowGetScreen window
 
+#if MIN_VERSION_gtk(0,13,0) || defined(MIN_VERSION_gtk3)
 getActiveSettings :: PaneMonad alpha => alpha (Maybe Settings)
 getActiveSettings = do
     mbScreen <- getActiveScreen
     case mbScreen of
         Nothing -> return Nothing
         Just screen -> liftIO $ Just <$> settingsGetForScreen screen
+#endif
 
 viewFullScreen :: PaneMonad alpha => alpha ()
 viewFullScreen = do
@@ -862,6 +860,7 @@ viewLight = setDark False
 
 setDark :: PaneMonad alpha => Bool -> alpha ()
 setDark dark = do
+#if MIN_VERSION_gtk(0,13,0) || defined(MIN_VERSION_gtk3)
     mbSettings <- getActiveSettings
     case mbSettings of
         Just settings -> liftIO $ settingsSetLongProperty
@@ -870,6 +869,9 @@ setDark dark = do
                             (if dark then 1 else 0)
                             "Leksah"
         Nothing -> return ()
+#else
+    return ()
+#endif
 
 groupMenuLabel :: PaneMonad beta => String -> beta (Maybe Label)
 groupMenuLabel group = liftM Just (liftIO $ labelNew (Just group))

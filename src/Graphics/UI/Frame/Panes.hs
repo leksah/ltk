@@ -207,23 +207,3 @@ instance Show Notebook where
 signalDisconnectAll :: Connections -> IO ()
 signalDisconnectAll = mapM_ (\ (ConnectC s) -> signalDisconnect s)
 
-
--- Necessary with pre 10.1 verion of gtk2hs
-
-#ifdef MIN_VERSION_gtk
-#if MIN_VERSION_gtk(0,10,1)
-#else
-instance Eq Notebook
-    where (==) a b = let (GObject pa, GObject pb) = (toGObject a, toGObject b)
-                    in pa == pb
-instance Ord Notebook
-    where (<=) a b = let (GObject pa, GObject pb) = (toGObject a, toGObject b)
-                    in pa <= pb
-instance Eq Window
-    where (==) a b = let (GObject pa, GObject pb) = (toGObject a, toGObject b)
-                    in pa == pb
-instance Eq Widget
-    where (==) a b = let (GObject pa, GObject pb) = (toGObject a, toGObject b)
-                    in pa == pb
-#endif
-#endif
