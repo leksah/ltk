@@ -48,10 +48,6 @@ module Graphics.UI.Frame.ViewFrame (
 ,   viewNest'
 ,   viewDetach
 ,   viewDetach'
-,   viewFullScreen
-,   viewExitFullScreen
-,   viewDark
-,   viewLight
 ,   handleNotebookSwitch
 ,   viewCollapse
 ,   viewCollapse'
@@ -75,6 +71,8 @@ module Graphics.UI.Frame.ViewFrame (
 ,   getUiManager
 ,   getWindows
 ,   getMainWindow
+,   getActiveWindow
+,   getActiveScreen
 ,   getLayout
 ,   getPanesSt
 ,   getPaneMapSt
@@ -828,50 +826,6 @@ getActiveScreen = do
     case mbWindow of
         Nothing -> return Nothing
         Just window -> liftIO $ Just <$> windowGetScreen window
-
-#if MIN_VERSION_gtk(0,13,0) || defined(MIN_VERSION_gtk3)
-getActiveSettings :: PaneMonad alpha => alpha (Maybe Settings)
-getActiveSettings = do
-    mbScreen <- getActiveScreen
-    case mbScreen of
-        Nothing -> return Nothing
-        Just screen -> liftIO $ Just <$> settingsGetForScreen screen
-#endif
-
-viewFullScreen :: PaneMonad alpha => alpha ()
-viewFullScreen = do
-    mbWindow <- getActiveWindow
-    case mbWindow of
-        Nothing -> return ()
-        Just window -> liftIO $ windowFullscreen window
-
-viewExitFullScreen :: PaneMonad alpha => alpha ()
-viewExitFullScreen = do
-    mbWindow <- getActiveWindow
-    case mbWindow of
-        Nothing -> return ()
-        Just window -> liftIO $ windowUnfullscreen window
-
-viewDark :: PaneMonad alpha => alpha ()
-viewDark = setDark True
-
-viewLight :: PaneMonad alpha => alpha ()
-viewLight = setDark False
-
-setDark :: PaneMonad alpha => Bool -> alpha ()
-setDark dark = do
-#if MIN_VERSION_gtk(0,13,0) || defined(MIN_VERSION_gtk3)
-    mbSettings <- getActiveSettings
-    case mbSettings of
-        Just settings -> liftIO $ settingsSetLongProperty
-                            settings
-                            "gtk-application-prefer-dark-theme"
-                            (if dark then 1 else 0)
-                            "Leksah"
-        Nothing -> return ()
-#else
-    return ()
-#endif
 
 groupMenuLabel :: PaneMonad beta => String -> beta (Maybe Label)
 groupMenuLabel group = liftM Just (liftIO $ labelNew (Just group))
