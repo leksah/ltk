@@ -644,7 +644,7 @@ groupNameDialog parent =  liftIO $ do
     dia                        <-   dialogNew
     set dia [ windowTransientFor := parent
             , windowTitle        := "Enter group name" ]
-#if MIN_VERSION_gtk(0,13,0) || defined(MIN_VERSION_gtk3)
+#ifdef MIN_VERSION_gtk3
     upper                      <-   castToVBox <$> dialogGetContentArea dia
 #else
     upper                      <-   castToVBox <$> dialogGetUpper dia
