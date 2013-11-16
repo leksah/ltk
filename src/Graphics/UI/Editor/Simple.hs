@@ -389,6 +389,7 @@ comboSelectionEditor list showF parameters notifier = do
             case core of
                 Nothing  -> do
                     combo <- comboBoxNewText
+                    widgetSetSizeRequest combo 200 (-1)
                     mapM_ (\o -> comboBoxAppendText combo (showF o)) list
                     widgetSetName combo (getParameter paraName parameters)
                     mapM_ (activateEvent (castToWidget combo) notifier Nothing) genericGUIEvents
