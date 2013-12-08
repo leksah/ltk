@@ -1,15 +1,13 @@
 language: haskell
 before_install:
   - sudo apt-get update -qq
-  - sudo apt-get --no-install-recommends install darcs libgtksourceview-3.0-dev
-  - mkdir vendor
-  - cd vendor
-  - darcs get --lazy http://code.haskell.org/gtk2hs
-  - cabal install ./gtk2hs/tools
-  - cd ..
+  - sudo apt-get --no-install-recommends install libgtksourceview-3.0-dev alex happy
+  - cabal install Cabal
+  - cabal install cabal-install
 install:
-  - cabal install cabal-meta cabal-src
-  - cabal-meta install --force-reinstalls
+  - PATH="$HOME/.cabal/bin:$PATH" cabal install gtk2hs-buildtools
+script:
+  - PATH="$HOME/.cabal/bin:$PATH" cabal install
 notifications:
   irc:
     channels: "irc.freenode.net#leksah"
