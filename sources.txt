@@ -1,2 +1,0 @@
-darcs:http://code.haskell.org/gtk2hs
-./
