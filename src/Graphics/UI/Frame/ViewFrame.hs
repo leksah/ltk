@@ -238,14 +238,12 @@ mkLabelBox lbl paneName = do
         buttonSetRelief tabButton ReliefNone
         buttonSetAlignment tabButton (0.0,0.0)
 
-        image     <- imageNewFromStock stockClose IconSizeMenu
-        mbPB <- widgetRenderIcon tabButton stockClose IconSizeMenu ""
-        (height,width) <- case mbPB of
-                                Nothing -> return (14,14)
-                                Just pb -> do
-                                h <- pixbufGetHeight pb
-                                w <- pixbufGetWidth pb
-                                return (h,w)
+        iconTheme <- iconThemeGetDefault
+        mbIcon <- iconThemeLoadIcon iconTheme "window-close" 10 IconLookupUseBuiltin
+        image <- case mbIcon of
+                    Just i  -> imageNewFromPixbuf i
+                    Nothing -> imageNewFromStock stockClose IconSizeMenu
+
 #ifdef MIN_VERSION_gtk3
         provider <- cssProviderNew
         cssProviderLoadFromString provider $
@@ -260,8 +258,6 @@ mkLabelBox lbl paneName = do
         context <- widgetGetStyleContext tabButton
         styleContextAddProvider context provider 600
 #endif
-        on tabButton styleSet (\style -> do
-            widgetSetSizeRequest tabButton (height + 2) (width + 2))
         containerSetBorderWidth tabButton 0
         containerAdd tabButton image
 
