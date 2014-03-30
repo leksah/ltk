@@ -26,6 +26,7 @@ module Graphics.UI.Editor.Simple (
 ,   fontEditor
 ,   colorEditor
 ,   comboSelectionEditor
+,   comboEntryEditor
 ,   staticListEditor
 ,   staticListMultiEditor
 ,   multiselectionEditor
@@ -55,6 +56,7 @@ import Graphics.UI.Editor.Basics
         genericGUIEvents, activateEvent, Editor)
 import Control.Exception as E (catch, IOException)
 import Control.Monad.IO.Class (MonadIO(..))
+import Control.Applicative ((<$>))
 
 -- ------------------------------------------------------------
 -- * Simple Editors
@@ -379,7 +381,6 @@ buttonEditor parameters notifier = do
 --
 -- | Editor for the selection of some element from a static list of elements in the
 -- | form of a combo box
-
 comboSelectionEditor :: Eq beta => [beta] -> (beta -> String) -> Editor beta
 comboSelectionEditor list showF parameters notifier = do
     coreRef <- newIORef Nothing
@@ -417,6 +418,52 @@ comboSelectionEditor list showF parameters notifier = do
                     case ind of
                         (-1)   -> return Nothing
                         otherwise  -> return (Just (list !! ind)))
+        parameters
+        notifier
+
+-- | Like comboSelectionEditor but allows entry of text not in the list
+comboEntryEditor :: [String] -> Editor String
+comboEntryEditor list parameters notifier = do
+    coreRef <- newIORef Nothing
+    mkEditor
+        (\widget obj -> do
+            core <- readIORef coreRef
+            case core of
+                Nothing  -> do
+                    combo <- comboBoxNewWithEntry
+                    comboBoxSetModelText combo
+                    widgetSetSizeRequest combo 200 (-1)
+                    mapM_ (comboBoxAppendText combo) list
+                    widgetSetName combo (getParameter paraName parameters)
+                    mapM_ (activateEvent (castToWidget combo) notifier Nothing) genericGUIEvents
+                    activateEvent (castToWidget combo) notifier
+                        (Just (\ w h -> do
+                            res     <-  on (castToComboBox w) changed (h >> return ())
+                            return (unsafeCoerce res))) MayHaveChanged
+                    comboBoxSetActive combo 1
+                    containerAdd widget combo
+                    let ind = elemIndex obj list
+                    case ind of
+                        Just i -> comboBoxSetActive combo i
+                        Nothing -> do
+                            mbEntry <- binGetChild combo
+                            case mbEntry of
+                                Nothing -> return ()
+                                Just entry -> entrySetText (castToEntry entry) obj
+                    writeIORef coreRef (Just combo)
+                Just combo -> do
+                    let ind = elemIndex obj list
+                    case ind of
+                        Just i -> comboBoxSetActive combo i
+                        Nothing -> return ())
+        (do core <- readIORef coreRef
+            case core of
+                Nothing -> return Nothing
+                Just combo -> do
+                    mbEntry <- binGetChild combo
+                    case mbEntry of
+                        Nothing -> return Nothing
+                        Just entry -> Just <$> entryGetText (castToEntry entry))
         parameters
         notifier
 

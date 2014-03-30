@@ -711,24 +711,18 @@ stringsEditor validation trimBlanks p =
 dependencyEditor :: [PackageIdentifier] -> Editor Dependency
 dependencyEditor packages para noti = do
     (wid,inj,ext) <- pairEditor
-        ((eitherOrEditor (comboSelectionEditor ((sort . nub) (map (display . pkgName) packages)) id
+        (comboEntryEditor ((sort . nub) (map (display . pkgName) packages))
             , paraName <<<- ParaName "Select" $ emptyParams)
-            (stringEditor (const True) True, paraName <<<- ParaName "Enter" $ emptyParams)
-            "Select from list?"), paraName <<<- ParaName "Name"$ emptyParams)
         (versionRangeEditor,paraName <<<- ParaName "Version" $ emptyParams)
         (paraDirection <<<- ParaDirection Vertical $ para)
         noti
-    let pinj (Dependency pn@(PackageName s) v) = if elem s (map (display . pkgName) packages)
-                                                    then inj (Left s,v)
-                                                    else inj (Right s,v)
+    let pinj (Dependency pn@(PackageName s) v) = inj (s,v)
     let pext = do
         mbp <- ext
         case mbp of
             Nothing -> return Nothing
-            Just (Left "",v) -> return Nothing
-            Just (Left s,v) -> return (Just $ Dependency (PackageName s) v)
-            Just (Right "",v) -> return Nothing
-            Just (Right s,v) -> return (Just $ Dependency (PackageName s) v)
+            Just ("",v) -> return Nothing
+            Just (s,v) -> return (Just $ Dependency (PackageName s) v)
     return (wid,pinj,pext)
 
 dependenciesEditor :: [PackageIdentifier] -> Editor [Dependency]
