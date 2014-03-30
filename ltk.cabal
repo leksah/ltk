@@ -1,5 +1,5 @@
 name: ltk
-version: 0.13.1.0
+version: 0.13.2.0
 cabal-version: >= 1.8
 build-type: Simple
 license: GPL
@@ -14,6 +14,10 @@ description: UI Framework used by leksah
 category: GUI
 author: Juergen "jutaro" Nicklisch-Franken
 tested-with: GHC ==6.10 || ==6.12 || ==7.0
+
+source-repository head
+  type:     git
+  location: https://github.com/leksah/ltk
 
 Flag gtk3
     description: Use Gtk3
