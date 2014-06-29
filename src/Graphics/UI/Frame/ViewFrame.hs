@@ -253,7 +253,7 @@ mkLabelBox lbl paneName = do
             "-GtkButton-inner-border: 0px;\n" ++
             "-GtkWidget-focus-line-width : 0px;\n" ++
             "-GtkWidget-focus-padding : 0px;\n" ++
-            "padding: 0px;\n" ++
+            "padding: 2px;\n" ++
             "}"
         context <- widgetGetStyleContext tabButton
         styleContextAddProvider context provider 600
@@ -261,8 +261,8 @@ mkLabelBox lbl paneName = do
         containerSetBorderWidth tabButton 0
         containerAdd tabButton image
 
-        boxPackStart innerBox lbl PackNatural 0
-        boxPackEnd innerBox tabButton PackNatural 0
+        boxPackStart innerBox tabButton PackNatural 0
+        boxPackStart innerBox lbl       PackGrow 0
 
         containerAdd labelBox innerBox
         dragSourceSet labelBox [Button1] [ActionCopy,ActionMove]
