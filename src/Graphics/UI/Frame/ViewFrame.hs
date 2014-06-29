@@ -6,6 +6,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  IDE.Core.ViewFrame
@@ -98,6 +99,7 @@ import Data.List
 import Data.Maybe
 import Data.Unique
 import Data.Typeable
+import Data.Text (Text)
 
 import Graphics.UI.Frame.Panes
 import Graphics.UI.Editor.Parameters
@@ -289,7 +291,7 @@ mkLabelBox lbl paneName = do
 
 groupLabel :: PaneMonad beta => String -> beta EventBox
 groupLabel group = do
-    label <- liftIO $ labelNew Nothing
+    label <- liftIO $ labelNew (Nothing::Maybe Text)
     liftIO $ labelSetUseMarkup label True
     liftIO $ labelSetMarkup label ("<b>" ++ group ++ "</b>")
     labelBox <- mkLabelBox label (groupPrefix ++ group)
@@ -308,7 +310,7 @@ markLabel nb topWidget modified = do
                 Nothing -> return ()
                 Just container -> do
                     children <- containerGetChildren container
-                    let label = castToLabel $ forceHead children "ViewFrame>>markLabel: empty children"
+                    let label = castToLabel $ forceHead (tail children) "ViewFrame>>markLabel: empty children"
                     text <- widgetGetName topWidget
                     labelSetUseMarkup (castToLabel label) True
                     labelSetMarkup (castToLabel label)
@@ -440,7 +442,7 @@ viewSplit' panePath dir = do
                                                                  return (castToPaned h)
                                               Vertical    -> do  v <- hPanedNew
                                                                  return (castToPaned v)
-                                rName <- widgetGetName activeNotebook
+                                rName::Text <- widgetGetName activeNotebook
                                 widgetSetName newpane rName
                                 widgetSetName nb altname
                                 panedPack2 newpane nb True True
