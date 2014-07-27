@@ -18,20 +18,14 @@ module MyMissing (
 ,   forceJust
 ,   forceHead
 ,   split
-,   replace
 ,   nonEmptyLines
-,   trim
 ) where
 
+import Data.Text (Text)
+import qualified Data.Text as T (unpack)
 import Data.List (find,unfoldr)
 import Data.Maybe (isJust)
 import Data.Char (isSpace)
-
-
--- | remove leading and trailing spaces
-trim :: String -> String
-trim      = f . f
-   where f = reverse . dropWhile isSpace
 
 nonEmptyLines :: String -> [String]
 nonEmptyLines = filter (\line -> isJust $ find (not . isSpace) line) . lines
@@ -43,17 +37,17 @@ allOf = map toEnum [fromEnum (minBound :: alpha) .. fromEnum (maxBound :: alpha)
 -- ---------------------------------------------------------------------
 -- Convenience methods with error handling
 --
-forceJust :: Maybe alpha -> String -> alpha
+forceJust :: Maybe alpha -> Text -> alpha
 forceJust mb str = case mb of
-			Nothing -> error str
+			Nothing -> error (T.unpack str)
 			Just it -> it
 
 -- ---------------------------------------------------------------------
 -- Convenience methods with error handling
 --
-forceHead :: [alpha] -> String -> alpha
+forceHead :: [alpha] -> Text -> alpha
 forceHead (h:_) str = h
-forceHead [] str = error str
+forceHead [] str = error (T.unpack str)
 
 
 -- ---------------------------------------------------------------------
@@ -69,14 +63,3 @@ split' c l
   | otherwise = Just (h, drop 1 t)
   where (h, t) = span (/=c) l
 
--- ---------------------------------------------------------------------
--- Simple replacement
---
-
-replace :: Eq a => [a] -> [a] -> [a] -> [a]
-replace _ _ [] = []
-replace from to xs@(a:as) =
-    if isPrefixOf from xs
-        then to ++ replace from to (drop (length from) xs)
-        else a : replace from to as
-    where isPrefixOf as bs = and $ zipWith (== ) as bs

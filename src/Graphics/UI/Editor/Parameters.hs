@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  Graphics.UI.Editor.Parameters
@@ -40,6 +41,7 @@ module Graphics.UI.Editor.Parameters (
 
 import Graphics.UI.Gtk
 import Data.Maybe
+import Data.Text (Text)
 import qualified Data.List as List
 
 
@@ -56,8 +58,8 @@ data HorizontalAlign =   StartHorizontal | StopHorizontal | Keep
 --
 type Parameters     =   [Parameter]
 
-data Parameter      =   ParaName String
-                    |   ParaSynopsis String
+data Parameter      =   ParaName Text
+                    |   ParaSynopsis Text
                     |   ParaDirection Direction
                     |   ParaShadow ShadowType
                     |   ParaShowLabel Bool
@@ -71,7 +73,7 @@ data Parameter      =   ParaName String
                                                 --  | paddingTop paddingBottom paddingLeft paddingRight
                     |   ParaMinSize         (Int, Int)
                     |   ParaHorizontal      HorizontalAlign
-                    |   ParaStockId String
+                    |   ParaStockId Text
                     |   ParaMultiSel Bool
                     |   ParaPack Packing
     deriving (Eq,Show)
@@ -88,11 +90,11 @@ data Parameter      =   ParaName String
 emptyParams         ::   [Parameter]
 emptyParams         =   []
 
-paraName                        ::   (Parameter -> (Maybe String))
+paraName                        ::   (Parameter -> (Maybe Text))
 paraName (ParaName str)         =   Just str
 paraName _                      =   Nothing
 
-paraSynopsis                    ::   (Parameter -> (Maybe String))
+paraSynopsis                    ::   (Parameter -> (Maybe Text))
 paraSynopsis (ParaSynopsis str) =   Just str
 paraSynopsis _                  =   Nothing
 
@@ -132,7 +134,7 @@ paraHorizontal                  ::   (Parameter -> (Maybe (HorizontalAlign)))
 paraHorizontal (ParaHorizontal d) =   Just d
 paraHorizontal _                =   Nothing
 
-paraStockId                     ::   (Parameter -> (Maybe String))
+paraStockId                     ::   (Parameter -> (Maybe Text))
 paraStockId (ParaStockId str)   =   Just str
 paraStockId _                   =   Nothing
 

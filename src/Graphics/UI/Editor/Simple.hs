@@ -1,4 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  Graphics.UI.Editor.Simple
@@ -19,6 +20,7 @@ module Graphics.UI.Editor.Simple (
 ,   boolEditor2
 ,   enumEditor
 ,   clickEditor
+,   textEditor
 ,   stringEditor
 ,   multilineStringEditor
 ,   intEditor
@@ -48,7 +50,7 @@ import Graphics.UI.Editor.Parameters
 --import Graphics.UI.Editor.Basics
 import Graphics.UI.Editor.MakeEditor
 import Control.Event
-import MyMissing (trim, allOf)
+import MyMissing (allOf)
 import qualified Graphics.UI.Gtk.Gdk.Events as Gtk (Event(..))
 import Unsafe.Coerce (unsafeCoerce)
 import Graphics.UI.Editor.Basics
@@ -57,6 +59,9 @@ import Graphics.UI.Editor.Basics
 import Control.Exception as E (catch, IOException)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Applicative ((<$>))
+import qualified Data.Text as T (strip, unpack, pack, empty)
+import Data.Monoid ((<>))
+import Data.Text (Text)
 
 -- ------------------------------------------------------------
 -- * Simple Editors
@@ -103,13 +108,13 @@ boolEditor parameters notifier = do
                 Just button -> do
                     r <- toggleButtonGetActive button
                     return (Just r))
-        (paraName <<<- ParaName "" $ parameters)
+        (paraName <<<- ParaName T.empty $ parameters)
         notifier
 
 --
 -- | Editor for a boolean value in the form of two radio buttons
 ----
-boolEditor2 :: String -> Editor Bool
+boolEditor2 :: Text -> Editor Bool
 boolEditor2 label2 parameters notifier = do
     coreRef <- newIORef Nothing
     mkEditor
@@ -122,8 +127,8 @@ boolEditor2 label2 parameters notifier = do
                     radio2 <- radioButtonNewWithLabelFromWidget radio1 label2
                     boxPackStart box radio1 PackGrow 2
                     boxPackStart box radio2 PackGrow 2
-                    widgetSetName radio1 $ getParameter paraName parameters ++ ".1"
-                    widgetSetName radio2 $ getParameter paraName parameters ++ ".2"
+                    widgetSetName radio1 $ getParameter paraName parameters <> ".1"
+                    widgetSetName radio2 $ getParameter paraName parameters <> ".2"
                     containerAdd widget box
                     if bool
                         then toggleButtonSetActive radio1 True
@@ -148,7 +153,7 @@ boolEditor2 label2 parameters notifier = do
 --
 -- | Editor for an enum value in the form of n radio buttons
 ----
-enumEditor :: forall alpha . (Show alpha, Enum alpha, Bounded alpha)  => [String] -> Editor alpha
+enumEditor :: forall alpha . (Show alpha, Enum alpha, Bounded alpha)  => [Text] -> Editor alpha
 enumEditor labels parameters notifier = do
     coreRef <- newIORef Nothing
     let vals :: [alpha] =  allOf
@@ -158,16 +163,16 @@ enumEditor labels parameters notifier = do
             case core of
                 Nothing  -> do
                     box <- vBoxNew True 2
-                    let label0 = if length labels > 0 then labels !! 0 else show (vals !! 0)
+                    let label0 = if length labels > 0 then labels !! 0 else T.pack (show (vals !! 0))
                     button0 <- radioButtonNewWithLabel label0
                     buttons <- mapM (\ v -> do
                         let n = fromEnum v
-                        let label = if length labels > n then labels !! n else show v
+                        let label = if length labels > n then labels !! n else T.pack (show v)
                         radio <- if n == 0
                                     then return button0
                                     else radioButtonNewWithLabelFromWidget button0 label
                         boxPackStart box radio PackGrow 2
-                        widgetSetName radio (label ++ show n)
+                        widgetSetName radio (label <> T.pack (show n))
                         return radio) vals
                     containerAdd widget box
                     mapM_
@@ -243,10 +248,10 @@ imageEditor parameters notifier = do
         notifier
 
 --
--- | Editor for a string in the form of a text entry
+-- | Editor for a Text in the form of a text entry
 --
-stringEditor :: (String -> Bool) -> Bool -> Editor String
-stringEditor validation trimBlanks parameters notifier = do
+textEditor :: (Text -> Bool) -> Bool -> Editor Text
+textEditor validation trimBlanks parameters notifier = do
     coreRef <- newIORef Nothing
     mkEditor
         (\widget string -> do
@@ -258,24 +263,32 @@ stringEditor validation trimBlanks parameters notifier = do
                     mapM_ (activateEvent (castToWidget entry) notifier Nothing) genericGUIEvents
                     propagateAsChanged notifier [KeyPressed]
                     containerAdd widget entry
-                    entrySetText entry (if trimBlanks then trim string else string)
+                    entrySetText entry (if trimBlanks then T.strip string else string)
                     writeIORef coreRef (Just entry)
-                Just entry -> entrySetText entry (if trimBlanks then trim string else string))
+                Just entry -> entrySetText entry (if trimBlanks then T.strip string else string))
         (do core <- readIORef coreRef
             case core of
                 Nothing -> return Nothing
                 Just entry -> do
                     r <- entryGetText entry
                     if validation r
-                        then return (Just (if trimBlanks then trim r else r))
+                        then return (Just (if trimBlanks then T.strip r else r))
                         else return Nothing)
         parameters
         notifier
 
 --
+-- | Editor for a String in the form of a text entry
+--
+stringEditor :: (String -> Bool) -> Bool -> Editor String
+stringEditor validation trimBlanks parameters notifier = do
+    (wid,inj,ext) <- textEditor (validation . T.unpack) True parameters notifier
+    return (wid, inj . T.pack, (T.unpack <$>) <$> ext)
+
+--
 -- | Editor for a multiline string in the form of a multiline text entry
 --
-multilineStringEditor :: Editor String
+multilineStringEditor :: Editor Text
 multilineStringEditor parameters notifier = do
     coreRef <- newIORef Nothing
     mkEditor
@@ -381,7 +394,7 @@ buttonEditor parameters notifier = do
 --
 -- | Editor for the selection of some element from a static list of elements in the
 -- | form of a combo box
-comboSelectionEditor :: Eq beta => [beta] -> (beta -> String) -> Editor beta
+comboSelectionEditor :: Eq beta => [beta] -> (beta -> Text) -> Editor beta
 comboSelectionEditor list showF parameters notifier = do
     coreRef <- newIORef Nothing
     mkEditor
@@ -422,7 +435,7 @@ comboSelectionEditor list showF parameters notifier = do
         notifier
 
 -- | Like comboSelectionEditor but allows entry of text not in the list
-comboEntryEditor :: [String] -> Editor String
+comboEntryEditor :: [Text] -> Editor Text
 comboEntryEditor list parameters notifier = do
     coreRef <- newIORef Nothing
     mkEditor
@@ -490,7 +503,7 @@ multiselectionEditor parameters notifier = do
                     treeViewAppendColumn listView col
                     cellLayoutPackStart col renderer True
                     cellLayoutSetAttributes col renderer listStore
-                        $ \row -> [ cellText := show row ]
+                        $ \row -> [ cellText := T.pack (show row) ]
                     treeViewSetHeadersVisible listView False
                     listStoreClear listStore
                     mapM_ (listStoreAppend listStore) objs
@@ -517,7 +530,7 @@ multiselectionEditor parameters notifier = do
 -- | Editor for the selection of some elements from a static list of elements in the
 -- | form of a list box with toggle elements
 
-staticListMultiEditor :: (Eq beta) => [beta] -> (beta -> String) -> Editor [beta]
+staticListMultiEditor :: (Eq beta) => [beta] -> (beta -> Text) -> Editor [beta]
 staticListMultiEditor list showF parameters notifier = do
     coreRef <- newIORef Nothing
     mkEditor
@@ -592,7 +605,7 @@ staticListMultiEditor list showF parameters notifier = do
 -- | Editor for the selection of some elements from a static list of elements in the
 -- | form of a list box
 
-staticListEditor :: (Eq beta) => [beta] -> (beta -> String) -> Editor beta
+staticListEditor :: (Eq beta) => [beta] -> (beta -> Text) -> Editor beta
 staticListEditor list showF parameters notifier = do
     coreRef <- newIORef Nothing
     mkEditor
@@ -657,7 +670,7 @@ staticListEditor list showF parameters notifier = do
 --
 -- | Editor for the selection of a file path in the form of a text entry and a button,
 -- | which opens a gtk file chooser
-fileEditor :: Maybe FilePath -> FileChooserAction -> String -> Editor FilePath
+fileEditor :: Maybe FilePath -> FileChooserAction -> Text -> Editor FilePath
 fileEditor mbFilePath action buttonName parameters notifier = do
     coreRef <- newIORef Nothing
     mkEditor
@@ -666,11 +679,11 @@ fileEditor mbFilePath action buttonName parameters notifier = do
             case core of
                 Nothing  -> do
                     button <- buttonNewWithLabel buttonName
-                    widgetSetName button $ getParameter paraName parameters ++ "-button"
+                    widgetSetName button $ getParameter paraName parameters <> "-button"
                     mapM_ (activateEvent (castToWidget button) notifier Nothing)
                         (Clicked:genericGUIEvents)
                     entry   <-  entryNew
-                    widgetSetName entry $ getParameter paraName parameters ++ "-entry"
+                    widgetSetName entry $ getParameter paraName parameters <> "-entry"
                     -- set entry [ entryEditable := False ]
                     mapM_ (activateEvent (castToWidget entry) notifier Nothing) genericGUIEvents
                     registerEvent notifier Clicked (buttonHandler entry)
@@ -685,23 +698,23 @@ fileEditor mbFilePath action buttonName parameters notifier = do
                     boxPackStart box entry PackGrow 0
                     boxPackEnd box button PackNatural 0
                     containerAdd widget box
-                    entrySetText entry filePath
+                    entrySetText entry (T.pack filePath)
                     writeIORef coreRef (Just entry)
-                Just entry -> entrySetText entry filePath)
+                Just entry -> entrySetText entry (T.pack filePath))
         (do core <- readIORef coreRef
             case core of
                 Nothing -> return Nothing
                 Just entry -> do
                     str <- entryGetText entry
-                    return (Just str))
+                    return (Just (T.unpack str)))
         parameters
         notifier
     where
     buttonHandler entry e =  do
         mbFileName <- do
             dialog <- fileChooserDialogNew
-                            (Just "Select File")
-                            Nothing
+                        (Just ("Select File"::Text))
+                        Nothing
                         action
                         [("gtk-cancel"
                         ,ResponseCancel)
@@ -727,7 +740,7 @@ fileEditor mbFilePath action buttonName parameters notifier = do
 --                let relative = case mbFilePath of
 --                                Nothing -> fn
 --                                Just rel -> makeRelative rel fn
-                entrySetText entry fn
+                entrySetText entry (T.pack fn)
                 triggerEvent notifier (GUIEvent {
                     selector = MayHaveChanged,
                     eventText = "",
@@ -737,7 +750,7 @@ fileEditor mbFilePath action buttonName parameters notifier = do
 --
 -- | Editor for a font selection
 --
-fontEditor :: Editor (Maybe String)
+fontEditor :: Editor (Maybe Text)
 fontEditor parameters notifier = do
     coreRef <- newIORef Nothing
     mkEditor
@@ -806,7 +819,7 @@ colorEditor parameters notifier = do
 -- | An editor, which opens another editor
 --   You have to inject a value before the button can be clicked.
 --
-otherEditor :: (alpha  -> String -> IO (Maybe alpha)) -> Editor alpha
+otherEditor :: (alpha  -> Text -> IO (Maybe alpha)) -> Editor alpha
 otherEditor func parameters notifier = do
     coreRef <- newIORef Nothing
     mkEditor

@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 -----------------------------------------------------------------------------
 --group_Test
 -- Module      :  Graphics.UI.Editor.MakeEditor
@@ -30,7 +31,9 @@ module Graphics.UI.Editor.MakeEditor (
 
 import Graphics.UI.Gtk
 import Control.Monad
-import Data.List (intersperse, unzip4)
+import Data.List (unzip4, intersperse)
+import Data.Text (Text)
+import Data.Monoid ((<>), mconcat)
 
 import Control.Event
 import Graphics.UI.Editor.Parameters
@@ -57,7 +60,7 @@ data FieldDescription alpha =  FD Parameters (alpha -> IO (Widget, Injector alph
                                     alpha -> Extractor alpha , Notifier))
     | VFD Parameters [FieldDescription alpha]
     | HFD Parameters [FieldDescription alpha]
-    | NFD [(String,FieldDescription alpha)]
+    | NFD [(Text,FieldDescription alpha)]
 
 parameters :: FieldDescription alpha -> Parameters
 parameters (FD p _) = p
@@ -209,20 +212,20 @@ mkEditor injectorC extractor parameters notifier = do
 
 -- | Convenience method to validate and extract fields
 --
-extractAndValidate :: alpha -> [alpha -> Extractor alpha] -> [String] -> Notifier -> IO (Maybe alpha)
+extractAndValidate :: alpha -> [alpha -> Extractor alpha] -> [Text] -> Notifier -> IO (Maybe alpha)
 extractAndValidate val getExts fieldNames notifier = do
     (newVal,errors) <- foldM (\ (val,errs) (ext,fn) -> do
         extVal <- ext val
         case extVal of
             Just nval -> return (nval,errs)
-            Nothing -> return (val, (' ' : fn) : errs))
+            Nothing -> return (val, (" " <> fn) : errs))
                 (val,[]) (zip getExts fieldNames)
     if null errors
         then return (Just newVal)
         else do
             triggerEvent notifier (GUIEvent {
                     selector = ValidationError,
-                    eventText = concat (intersperse ", " errors),
+                    eventText = mconcat (intersperse ", " errors),
                     gtkReturn = True})
             return Nothing
 

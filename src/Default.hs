@@ -17,6 +17,9 @@ module Default (
     Default(..)
 ) where
 
+import Data.Text (Text)
+import qualified Data.Text as T (empty)
+
 --
 -- | A class for providing default values for certain types of editors
 --
@@ -37,6 +40,9 @@ instance (Default alpha, Default beta, Default gamma) => Default (alpha, beta, g
 
 instance Default [alpha] where
         getDefault  =   []
+
+instance Default Text where
+        getDefault  =   T.empty
 
 instance Default (Maybe alpha) where
     getDefault      =   Nothing

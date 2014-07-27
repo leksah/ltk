@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeSynonymInstances, FlexibleInstances, ScopedTypeVariables #-}
+{-# LANGUAGE TypeSynonymInstances, FlexibleInstances, ScopedTypeVariables, OverloadedStrings #-}
 --
 -- | Module for saving and restoring preferences and settings
 --
@@ -45,11 +45,15 @@ import qualified Text.PrettyPrint as PP
 import Graphics.UI.Editor.Parameters
 import Graphics.UI.Editor.Basics
 import Data.Maybe (listToMaybe)
+import Data.Monoid ((<>))
 import Graphics.UI.Gtk (Color(..))
 import Data.List (foldl')
 import qualified Text.ParserCombinators.Parsec as  P
     ((<?>), CharParser(..), parseFromFile)
 import Control.Exception as E (catch, IOException)
+import qualified Data.Text as T (pack, unpack)
+import Data.Text (Text)
+import Control.Applicative ((<$>))
 
 
 type Printer beta       =   beta -> PP.Doc
@@ -77,12 +81,12 @@ mkFieldS :: {--Eq beta =>--} MkFieldDescriptionS alpha beta
 mkFieldS parameter printer parser getter setter =
     FDS parameter
         (\ dat -> (PP.text (case getParameterPrim paraName parameter of
-                                    Nothing -> ""
-                                    Just str -> str) PP.<> PP.colon)
+                                Nothing -> ""
+                                Just str -> T.unpack $ str) PP.<> PP.colon)
                 PP.$$ (PP.nest 15 (printer (getter dat)))
                 PP.$$ (PP.nest 5 (case getParameterPrim paraSynopsis parameter of
                                     Nothing -> PP.empty
-                                    Just str -> PP.text $"--" ++ str)))
+                                    Just str -> PP.text . T.unpack $ "--" <> str)))
         (\ dat -> try (do
             symbol (case getParameterPrim paraName parameter of
                                     Nothing -> ""
@@ -134,18 +138,18 @@ pairParser p2 = do
     return (v1,v2)
     <?> "pair parser"
 
-stringParser ::  CharParser () String
+stringParser ::  CharParser () Text
 stringParser = do
     char '"'
     str <- many (noneOf ['"'])
     char '"'
-    return (str)
+    return (T.pack str)
     <?> "string parser"
 
-lineParser ::  CharParser () String
+lineParser ::  CharParser () Text
 lineParser = do
     str <- many (noneOf ['\n'])
-    return (str)
+    return (T.pack str)
     <?> "line parser"
 
 
@@ -181,12 +185,12 @@ lexer = P.makeTokenParser prefsStyle
 whiteSpace :: CharParser st ()
 whiteSpace = P.whiteSpace lexer
 
-symbol :: String -> CharParser st String
-symbol = P.symbol lexer
+symbol :: Text -> CharParser st Text
+symbol = (T.pack <$>) . P.symbol lexer . T.unpack
 
-identifier, colon :: CharParser st String
-identifier = P.identifier lexer
-colon = P.colon lexer
+identifier, colon :: CharParser st Text
+identifier = T.pack <$> P.identifier lexer
+colon = T.pack <$> P.colon lexer
 
 integer = P.integer lexer
 
@@ -194,8 +198,8 @@ integer = P.integer lexer
 -- * Printing
 -- ------------------------------------------------------------
 -- | pretty-print with the default style and 'defaultMode'.
-prettyPrint :: Pretty a => a -> String
-prettyPrint a = PP.renderStyle  PP.style (pretty a)
+prettyPrint :: Pretty a => a -> Text
+prettyPrint a = T.pack $ PP.renderStyle  PP.style (pretty a)
 
 -- | Things that can be pretty-printed
 class Pretty a where
@@ -213,18 +217,18 @@ maybePP :: (a -> PP.Doc) -> Maybe a -> PP.Doc
 maybePP _ Nothing = PP.empty
 maybePP pp (Just a) = pp a
 
-instance Pretty String where
-    pretty str = PP.text str
+instance Pretty Text where
+    pretty str = PP.text $ T.unpack str
 
 -- ------------------------------------------------------------
 -- * Read and write
 -- ------------------------------------------------------------
 
 writeFields :: FilePath -> alpha -> [FieldDescriptionS alpha] -> IO ()
-writeFields fpath date dateDesc = writeFile fpath (showFields date dateDesc)
+writeFields fpath date dateDesc = writeFile fpath (T.unpack $ showFields date dateDesc)
 
-showFields ::  alpha  -> [FieldDescriptionS alpha] ->  String
-showFields date dateDesc = PP.render $
+showFields ::  alpha  -> [FieldDescriptionS alpha] ->  Text
+showFields date dateDesc = T.pack . PP.render $
     foldl' (\ doc (FDS _ printer _) ->  doc PP.$+$ printer date) PP.empty dateDesc
 
 readFields :: FilePath -> [FieldDescriptionS alpha] -> alpha -> IO alpha

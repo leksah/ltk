@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  Graphics.UI.Editor.DescriptionPP
@@ -30,6 +31,9 @@ import Graphics.UI.Editor.Parameters
 import Graphics.UI.Editor.MakeEditor
 --import IDE.Core.State
 import Graphics.UI.Editor.Basics (Applicator(..),Editor(..),Setter(..),Getter(..),Notifier(..),Extractor(..),Injector(..))
+import qualified Data.Text as T (unpack)
+import Data.Monoid ((<>))
+import Data.Text (Text)
 
 data FieldDescriptionPP alpha gamma =  FDPP {
         parameters      ::  Parameters
@@ -39,7 +43,7 @@ data FieldDescriptionPP alpha gamma =  FDPP {
     ,   applicator      ::  alpha -> alpha -> gamma ()}
     | VFDPP Parameters [FieldDescriptionPP alpha gamma]
     | HFDPP Parameters [FieldDescriptionPP alpha gamma]
-    | NFDPP [(String,FieldDescriptionPP alpha gamma)]
+    | NFDPP [(Text,FieldDescriptionPP alpha gamma)]
 
 type MkFieldDescriptionPP alpha beta gamma =
     Parameters      ->
@@ -57,11 +61,11 @@ mkFieldPP parameters printer parser getter setter editor applicator  =
     in FDPP parameters
         (\ dat -> (PP.text (case getParameterPrim paraName parameters of
                                     Nothing -> ""
-                                    Just str -> str) PP.<> PP.colon)
+                                    Just str -> T.unpack str) PP.<> PP.colon)
                 PP.$$ (PP.nest 15 (printer (getter dat)))
                 PP.$$ (PP.nest 5 (case getParameterPrim paraSynopsis parameters of
                                     Nothing -> PP.empty
-                                    Just str -> PP.text $"--" ++ str)))
+                                    Just str -> PP.text . T.unpack $ "--" <> str)))
         (\ dat -> P.try (do
             symbol (case getParameterPrim paraName parameters of
                                     Nothing -> ""

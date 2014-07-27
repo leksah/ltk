@@ -7,6 +7,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  IDE.Core.ViewFrame
@@ -111,11 +112,11 @@ import Graphics.UI.Gtk.Gdk.EventM (Modifier(..))
 import Graphics.UI.Gtk.General.CssProvider (cssProviderNew, cssProviderLoadFromString)
 import Graphics.UI.Gtk.General.StyleContext (styleContextAddProvider)
 #endif
-import MyMissing
+import MyMissing (forceJust, forceHead)
 import Graphics.UI.Gtk.Gdk.EventM (TimeStamp(..))
 import Graphics.UI.Editor.MakeEditor
     (mkField, FieldDescription(..), buildEditor)
-import Graphics.UI.Editor.Simple (stringEditor, okCancelFields)
+import Graphics.UI.Editor.Simple (stringEditor, textEditor, okCancelFields)
 import Control.Event (registerEvent)
 import Graphics.UI.Editor.Basics
     (eventText, GUIEventSelector(..))
@@ -126,14 +127,16 @@ import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad (when, liftM, foldM)
 import Control.Applicative ((<$>))
 import qualified Control.Monad.Reader as Gtk (liftIO)
+import qualified Data.Text as T (pack, stripPrefix, unpack)
+import Data.Monoid ((<>))
 
 --import Debug.Trace (trace)
-trace a b = b
+trace (a::Text) b = b
 
 groupPrefix = "_group_"
 
-withoutGroupPrefix :: String -> String
-withoutGroupPrefix s = case groupPrefix `stripPrefix` s of
+withoutGroupPrefix :: Text -> Text
+withoutGroupPrefix s = case groupPrefix `T.stripPrefix` s of
                             Nothing -> s
                             Just s' -> s'
 
@@ -180,7 +183,7 @@ addPaneAdmin pane conn pp = do
             setPanesSt (Map.insert (paneName pane) (PaneC pane) panes')
             return True
         else do
-            trace  ("ViewFrame>addPaneAdmin:pane with this name already exist" ++ paneName pane) $
+            trace ("ViewFrame>addPaneAdmin:pane with this name already exist" <> paneName pane) $
                 return False
 
 getPanePrim ::  RecoverablePane alpha beta delta => delta (Maybe alpha)
@@ -200,12 +203,12 @@ getPanes = do
 notebookInsertOrdered :: PaneMonad alpha => (NotebookClass self, WidgetClass child)		
     => self	
     -> child	-- child - the Widget to use as the contents of the page.
-    -> String
-    -> Maybe Label	-- the label for the page as String or Label
+    -> Text
+    -> Maybe Label	-- the label for the page as Text or Label
     -> Bool
     -> alpha ()
 notebookInsertOrdered nb widget labelStr mbLabel isGroup = do
-    label	    <-  case mbLabel of
+    label       <-  case mbLabel of
                         Nothing  -> liftIO $ labelNew (Just labelStr)
                         Just l  -> return l
     menuLabel   <-  liftIO $ labelNew (Just labelStr)
@@ -224,7 +227,7 @@ notebookInsertOrdered nb widget labelStr mbLabel isGroup = do
         notebookSetCurrentPage nb realPos
 
 -- | Returns a label box
-mkLabelBox :: PaneMonad alpha => Label -> String -> alpha EventBox
+mkLabelBox :: PaneMonad alpha => Label -> Text -> alpha EventBox
 mkLabelBox lbl paneName = do
     (tb,lb) <- liftIO $ do
         miscSetAlignment (castToMisc lbl) 0.0 0.0
@@ -235,28 +238,28 @@ mkLabelBox lbl paneName = do
         innerBox  <- hBoxNew False 0
 
         tabButton <- buttonNew
-        widgetSetName tabButton "leksah-close-button"
+        widgetSetName tabButton ("leksah-close-button"::Text)
         buttonSetFocusOnClick tabButton False
         buttonSetRelief tabButton ReliefNone
         buttonSetAlignment tabButton (0.0,0.0)
 
         iconTheme <- iconThemeGetDefault
-        mbIcon <- iconThemeLoadIcon iconTheme "window-close" 10 IconLookupUseBuiltin
+        mbIcon <- iconThemeLoadIcon iconTheme ("window-close"::Text) 10 IconLookupUseBuiltin
         image <- case mbIcon of
                     Just i  -> imageNewFromPixbuf i
                     Nothing -> imageNewFromStock stockClose IconSizeMenu
 
 #ifdef MIN_VERSION_gtk3
         provider <- cssProviderNew
-        cssProviderLoadFromString provider $
-            ".button {\n" ++
-            "-GtkButton-default-border : 0px;\n" ++
-            "-GtkButton-default-outside-border : 0px;\n" ++
-            "-GtkButton-inner-border: 0px;\n" ++
-            "-GtkWidget-focus-line-width : 0px;\n" ++
-            "-GtkWidget-focus-padding : 0px;\n" ++
-            "padding: 2px;\n" ++
-            "}"
+        cssProviderLoadFromString provider (
+            ".button {\n" <>
+            "-GtkButton-default-border : 0px;\n" <>
+            "-GtkButton-default-outside-border : 0px;\n" <>
+            "-GtkButton-inner-border: 0px;\n" <>
+            "-GtkWidget-focus-line-width : 0px;\n" <>
+            "-GtkWidget-focus-padding : 0px;\n" <>
+            "padding: 2px;\n" <>
+            "}" :: Text)
         context <- widgetGetStyleContext tabButton
         styleContextAddProvider context provider 600
 #endif
@@ -281,7 +284,7 @@ mkLabelBox lbl paneName = do
     return lb
     where
         closeHandler :: PaneMonad alpha => () -> alpha ()
-        closeHandler _ =    case groupPrefix `stripPrefix` paneName of
+        closeHandler _ =    case groupPrefix `T.stripPrefix` paneName of
                                 Just group  -> do
                                     closeGroup group
                                 Nothing -> do
@@ -289,12 +292,12 @@ mkLabelBox lbl paneName = do
                                     closePane pane
                                     return ()
 
-groupLabel :: PaneMonad beta => String -> beta EventBox
+groupLabel :: PaneMonad beta => Text -> beta EventBox
 groupLabel group = do
     label <- liftIO $ labelNew (Nothing::Maybe Text)
     liftIO $ labelSetUseMarkup label True
-    liftIO $ labelSetMarkup label ("<b>" ++ group ++ "</b>")
-    labelBox <- mkLabelBox label (groupPrefix ++ group)
+    liftIO $ labelSetMarkup label ("<b>" <> group <> "</b>")
+    labelBox <- mkLabelBox label (groupPrefix <> group)
     liftIO $ widgetShowAll labelBox
     return labelBox
 
@@ -311,15 +314,15 @@ markLabel nb topWidget modified = do
                 Just container -> do
                     children <- containerGetChildren container
                     let label = castToLabel $ forceHead (tail children) "ViewFrame>>markLabel: empty children"
-                    text <- widgetGetName topWidget
+                    (text :: Text) <- widgetGetName topWidget
                     labelSetUseMarkup (castToLabel label) True
                     labelSetMarkup (castToLabel label)
                         (if modified
-                              then "<span foreground=\"red\">" ++ text ++ "</span>"
+                              then "<span foreground=\"red\">" <> text <> "</span>"
                           else text)
 
 -- | Constructs a unique pane name, which is an index and a string
-figureOutPaneName :: PaneMonad alpha => String -> Int -> alpha (Int,String)
+figureOutPaneName :: PaneMonad alpha => Text -> Int -> alpha (Int,Text)
 figureOutPaneName bn ind = do
     bufs <- getPanesSt
     let ind = foldr (\(PaneC buf) ind ->
@@ -329,14 +332,14 @@ figureOutPaneName bn ind = do
                 0 (Map.elems bufs)
     if ind == 0
         then return (0,bn)
-        else return (ind,bn ++ "(" ++ show ind ++ ")")
+        else return (ind,bn <> "(" <> T.pack (show ind) <> ")")
 
 paneFromName :: PaneMonad alpha => PaneName -> alpha (IDEPane alpha)
 paneFromName pn = do
     mbPane <- mbPaneFromName pn
     case mbPane of
         Just p -> return p
-        Nothing -> error $ "ViewFrame>>paneFromName:Can't find pane from unique name " ++ pn
+        Nothing -> error $ "ViewFrame>>paneFromName:Can't find pane from unique name " ++ T.unpack pn
 
 mbPaneFromName :: PaneMonad alpha => PaneName -> alpha (Maybe (IDEPane alpha))
 mbPaneFromName pn = do
@@ -349,15 +352,15 @@ guiPropertiesFromName pn = do
     paneMap <- getPaneMapSt
     case Map.lookup pn paneMap of
             Just it -> return it
-            otherwise  -> error $"Cant't find guiProperties from unique name " ++ pn
+            otherwise  -> error $"Cant't find guiProperties from unique name " ++ T.unpack pn
 
 posTypeToPaneDirection PosLeft      =   LeftP
-posTypeToPaneDirection PosRight     =   RightP	
+posTypeToPaneDirection PosRight     =   RightP
 posTypeToPaneDirection PosTop       =   TopP
-posTypeToPaneDirection PosBottom    =   BottomP	
+posTypeToPaneDirection PosBottom    =   BottomP
 
 paneDirectionToPosType LeftP        =   PosLeft
-paneDirectionToPosType RightP       =   PosRight   	
+paneDirectionToPosType RightP       =   PosRight
 paneDirectionToPosType TopP         =   PosTop
 paneDirectionToPosType BottomP      =   PosBottom
 
@@ -444,13 +447,13 @@ viewSplit' panePath dir = do
                                                                  return (castToPaned v)
                                 rName::Text <- widgetGetName activeNotebook
                                 widgetSetName newpane rName
-                                widgetSetName nb altname
+                                widgetSetName nb (altname :: Text)
                                 panedPack2 newpane nb True True
                                 nbIndex <- if parent `isA` gTypeNotebook
                                             then notebookPageNum ((castToNotebook' "viewSplit'1") parent) activeNotebook
                                             else trace ("ViewFrame>>viewSplit': parent not a notebook: ") return Nothing
                                 containerRemove (castToContainer parent) activeNotebook
-                                widgetSetName activeNotebook name
+                                widgetSetName activeNotebook (name :: Text)
                                 panedPack1 newpane activeNotebook True True
                                 return (newpane,nbIndex)
                             case (reverse panePath, nbi) of
@@ -539,7 +542,7 @@ viewCollapse' panePath = trace "viewCollapse' called" $ do
                                                         $Map.toList paneMap
                             panesToMove       <- mapM paneFromName paneNamesToMove
                             mapM_ (\(PaneC p) -> move panePath p) panesToMove
-                            let groupNames    =  map (\n -> groupPrefix ++ n) $
+                            let groupNames    =  map (\n -> groupPrefix <> n) $
                                                         getGroupsFrom otherSidePath layout1
                             mapM_ (\n -> move' (n,activeNotebook)) groupNames
                             -- 2. Remove unused notebook from admin
@@ -580,7 +583,7 @@ viewCollapse' panePath = trace "viewCollapse' called" $ do
                                                 else liftIO $ do
                                                     boxPackStart (castToVBox grandparent) activeNotebook PackGrow 0
                                                     boxReorderChild (castToVBox grandparent) activeNotebook 2
-                                                    widgetSetName activeNotebook "root"
+                                                    widgetSetName activeNotebook ("root" :: Text)
                             -- 4. Change panePathFromNotebook
                             adjustNotebooks panePath newPanePath
                             -- 5. Change paneMap
@@ -588,7 +591,7 @@ viewCollapse' panePath = trace "viewCollapse' called" $ do
                             -- 6. Change layout
                             adjustLayoutForCollapse panePath
 
-getGroupsFrom :: PanePath -> PaneLayout -> [String]
+getGroupsFrom :: PanePath -> PaneLayout -> [Text]
 getGroupsFrom path layout =
     case layoutFromPath path layout of
         t@(TerminalP _ _ _ _ _)   -> Map.keys (paneGroups t)
@@ -606,14 +609,14 @@ viewNewGroup = do
             if groupName `Set.member` allGroupNames layout
                 then liftIO $ do
                     md <- messageDialogNew (Just mainWindow) [] MessageWarning ButtonsClose
-                        ("Group name not unique " ++ groupName)
+                        ("Group name not unique " <> groupName)
                     dialogRun md
                     widgetDestroy md
                     return ()
                 else viewNest groupName
         Nothing -> return ()
 
-newGroupOrBringToFront :: PaneMonad alpha => String -> PanePath -> alpha (Maybe PanePath,Bool)
+newGroupOrBringToFront :: PaneMonad alpha => Text -> PanePath -> alpha (Maybe PanePath,Bool)
 newGroupOrBringToFront groupName pp = do
     layout <- getLayoutSt
     if groupName `Set.member` allGroupNames layout
@@ -624,7 +627,7 @@ newGroupOrBringToFront groupName pp = do
             viewNest' realPath groupName
             return (Just (realPath ++ [GroupP groupName]),True)
 
-bringGroupToFront :: PaneMonad alpha => String -> alpha (Maybe PanePath)
+bringGroupToFront :: PaneMonad alpha => Text -> alpha (Maybe PanePath)
 bringGroupToFront groupName = do
     layout <- getLayoutSt
     case findGroupPath groupName layout   of
@@ -637,11 +640,11 @@ bringGroupToFront groupName = do
 
 --  Yet another stupid little dialog
 
-groupNameDialog :: Window -> IO (Maybe String)
+groupNameDialog :: Window -> IO (Maybe Text)
 groupNameDialog parent =  liftIO $ do
     dia                        <-   dialogNew
     set dia [ windowTransientFor := parent
-            , windowTitle        := "Enter group name" ]
+            , windowTitle        := ("Enter group name" :: Text) ]
 #ifdef MIN_VERSION_gtk3
     upper                      <-   castToVBox <$> dialogGetContentArea dia
 #else
@@ -658,23 +661,23 @@ groupNameDialog parent =  liftIO $ do
     boxPackStart upper widget PackGrow 7
     boxPackStart lower widget2 PackNatural 7
     widgetShowAll dia
-    resp <- dialogRun dia
-    value                      <- ext ("")
+    resp  <- dialogRun dia
+    value <- ext ("")
     widgetDestroy dia
     case resp of
-        ResponseOk | value /= Just ""  -> return value
+        ResponseOk | value /= Just "" -> return value
         _                             -> return Nothing
     where
-        moduleFields :: FieldDescription String
+        moduleFields :: FieldDescription Text
         moduleFields = VFD emptyParams [
                 mkField
                     (paraName <<<- ParaName ("New group ")
                             $ emptyParams)
                     id
                     (\ a b -> a)
-            (stringEditor (const True) True)]
+            (textEditor (const True) True)]
 
-viewNest :: PaneMonad alpha => String -> alpha ()
+viewNest :: PaneMonad alpha => Text -> alpha ()
 viewNest group = do
     mbPanePath        <- getActivePanePath
     case mbPanePath of
@@ -682,7 +685,7 @@ viewNest group = do
         Just panePath -> do
             viewNest' panePath group
 
-viewNest' :: PaneMonad alpha => PanePath -> String -> alpha ()
+viewNest' :: PaneMonad alpha => PanePath -> Text -> alpha ()
 viewNest' panePath group = do
     activeNotebook  <- (getNotebook' "viewNest' 1") panePath
     mbParent  <- liftIO $ widgetGetParent activeNotebook
@@ -694,7 +697,7 @@ viewNest' panePath group = do
             case paneLayout of
                 (TerminalP {}) -> do
                     nb <- newNotebook (panePath ++ [GroupP group])
-                    liftIO $ widgetSetName nb (groupPrefix ++ group)
+                    liftIO $ widgetSetName nb (groupPrefix <> group)
                     notebookInsertOrdered activeNotebook nb group Nothing True
                     liftIO $ widgetShowAll nb
                         --widgetGrabFocus activeNotebook
@@ -703,13 +706,13 @@ viewNest' panePath group = do
                     adjustLayoutForNest group panePath
                 _ -> return ()
 
-closeGroup :: PaneMonad alpha => String -> alpha ()
+closeGroup :: PaneMonad alpha => Text -> alpha ()
 closeGroup groupName = do
     layout <- getLayout
     let mbPath = findGroupPath groupName layout
     mainWindow <- getMainWindow
     case mbPath of
-        Nothing -> trace ("ViewFrame>>closeGroup: Group path not found: " ++ groupName) return ()
+        Nothing -> trace ("ViewFrame>>closeGroup: Group path not found: " <> groupName) return ()
         Just path -> do
             panesMap <- getPaneMapSt
             let nameAndpathList  = filter (\(a,pp) -> path `isPrefixOf` pp)
@@ -717,7 +720,7 @@ closeGroup groupName = do
             continue <- case nameAndpathList of
                             (_:_) -> liftIO $ do
                                 md <- messageDialogNew (Just mainWindow) [] MessageQuestion ButtonsYesNo
-                                    ("Group " ++ groupName ++ " not empty. Close with all contents?")
+                                    ("Group " <> groupName <> " not empty. Close with all contents?")
                                 rid <- dialogRun md
                                 widgetDestroy md
                                 case rid of
@@ -744,9 +747,9 @@ viewDetach = do
     case mbPanePath of
         Nothing -> return Nothing
         Just panePath -> do
-            viewDetach' panePath id
+            viewDetach' panePath (T.pack id)
 
-viewDetach' :: PaneMonad alpha => PanePath -> String -> alpha (Maybe (Window,Widget))
+viewDetach' :: PaneMonad alpha => PanePath -> Text -> alpha (Maybe (Window,Widget))
 viewDetach' panePath id = do
     activeNotebook  <- (getNotebook' "viewDetach'") panePath
     mbParent  <- liftIO $ widgetGetParent activeNotebook
@@ -759,7 +762,7 @@ viewDetach' panePath id = do
                 (TerminalP{detachedSize = size}) -> do
                     window <- liftIO $ do
                         window <- windowNew
-                        set window [ windowTitle := "Leksah detached window"
+                        set window [ windowTitle := ("Leksah detached window" :: Text)
                                    , widgetName  := Just id ]
                         case size of
                             Just (width, height) -> do
@@ -781,11 +784,11 @@ viewDetach' panePath id = do
 
 
 
-handleReattach :: PaneMonad alpha => String -> Window -> () -> alpha Bool
+handleReattach :: PaneMonad alpha => Text -> Window -> () -> alpha Bool
 handleReattach windowId window _ = do
     layout <- getLayout
     case findDetachedPath windowId layout of
-        Nothing -> trace ("ViewFrame>>handleReattach: panePath for id not found: " ++ windowId)
+        Nothing -> trace ("ViewFrame>>handleReattach: panePath for id not found: " <> windowId)
                 $ do
             windows <- getWindowsSt
             setWindowsSt $ delete window windows
@@ -825,7 +828,7 @@ getActiveScreen = do
         Nothing -> return Nothing
         Just window -> liftIO $ Just <$> windowGetScreen window
 
-groupMenuLabel :: PaneMonad beta => String -> beta (Maybe Label)
+groupMenuLabel :: PaneMonad beta => Text -> beta (Maybe Label)
 groupMenuLabel group = liftM Just (liftIO $ labelNew (Just group))
 
 handleNotebookSwitch :: PaneMonad beta => Notebook -> Int -> beta ()
@@ -840,7 +843,7 @@ handleNotebookSwitch nb index = do
                 Nothing         ->  return ()
                 Just (PaneC p)  ->  makeActive p
     where
-        findPaneFor :: PaneMonad beta => String -> beta (Maybe (IDEPane beta))
+        findPaneFor :: PaneMonad beta => Text -> beta (Maybe (IDEPane beta))
         findPaneFor n1   =   do
             panes'      <-  getPanesSt
             foldM (\r (PaneC p) -> do
@@ -909,10 +912,10 @@ move' (paneName,toNB) = do
     panes           <-  getPanesSt
     layout          <-  getLayout
     frameState      <-  getFrameState
-    case groupPrefix `stripPrefix` paneName of
+    case groupPrefix `T.stripPrefix` paneName of
         Just group  -> do
             case findGroupPath group layout of
-                Nothing -> trace ("ViewFrame>>move': group not found: " ++ group) return ()
+                Nothing -> trace ("ViewFrame>>move': group not found: " <> group) return ()
                 Just fromPath -> do
                     groupNBOrPaned <- getNotebookOrPaned fromPath castToWidget
                     fromNB  <- (getNotebook' "move'") (init fromPath)
@@ -935,13 +938,13 @@ move' (paneName,toNB) = do
                                         return ()
         Nothing     ->
             case paneName `Map.lookup` panes of
-                Nothing -> trace ("ViewFrame>>move': pane not found: " ++ paneName) return ()
+                Nothing -> trace ("ViewFrame>>move': pane not found: " <> paneName) return ()
                 Just (PaneC pane) -> do
                     case toNB `Map.lookup` (panePathFromNB frameState) of
                         Nothing -> trace "ViewFrame>>move': panepath for Notebook not found2" return ()
                         Just toPath ->
                             case paneName `Map.lookup`paneMap of
-                                Nothing -> trace ("ViewFrame>>move': pane data not found: " ++ paneName)
+                                Nothing -> trace ("ViewFrame>>move': pane data not found: " <> paneName)
                                             return ()
                                 Just (fromPath,_) -> do
                                     let child = getTopWidget pane
@@ -1016,7 +1019,7 @@ getBestPanePath sp pl = reverse $ getStandard' sp pl []
 --
 -- | Get a standard path.
 --
-getBestPathForId :: PaneMonad alpha => String -> alpha PanePath
+getBestPathForId :: PaneMonad alpha => Text -> alpha PanePath
 getBestPathForId  id = do
     p <- panePathForGroup id
     l <- getLayout
@@ -1078,30 +1081,30 @@ terminalsWithPanePath pl = map (\ (pp,l) -> (reverse pp,l)) $ terminalsWithPP []
                                                         ++ terminalsWithPP (SplitP BottomP : pp) b
         terminalsFromGroup pp (name,layout)        =  terminalsWithPP (GroupP name : pp) layout
 
-findGroupPath :: String -> PaneLayout -> Maybe PanePath
+findGroupPath :: Text -> PaneLayout -> Maybe PanePath
 findGroupPath group layout =
     let terminalPairs = terminalsWithPanePath layout
     in case (filter filterFunc terminalPairs) of
         [] -> Nothing
         (pp,_) : [] -> Just (pp ++ [GroupP group])
-        _ -> error ("ViewFrame>>group name not unique: " ++ group)
+        _ -> error ("ViewFrame>>group name not unique: " ++ T.unpack group)
     where
         filterFunc (_,(TerminalP groups _ _ _ _)) =  group  `Set.member` Map.keysSet groups
         filterFunc _                              =  error "ViewFrame>>findGroupPath: impossible"
 
-findDetachedPath :: String -> PaneLayout -> Maybe PanePath
+findDetachedPath :: Text -> PaneLayout -> Maybe PanePath
 findDetachedPath id layout =
     let terminalPairs = terminalsWithPanePath layout
     in case (filter filterFunc terminalPairs) of
         [] -> Nothing
         (pp,_) : [] -> Just pp
-        _ -> error ("ViewFrame>>window id not unique: " ++ id)
+        _ -> error ("ViewFrame>>window id not unique: " ++ T.unpack id)
     where
         filterFunc (_,(TerminalP _ _ _ (Just lid) _)) = lid == id
         filterFunc _                                  = False
 
 
-allGroupNames :: PaneLayout -> Set String
+allGroupNames :: PaneLayout -> Set Text
 allGroupNames pl = Set.unions $ map getFunc (terminalsWithPanePath pl)
     where
         getFunc (_,(TerminalP groups _ _ _ _)) =  Map.keysSet groups
@@ -1153,7 +1156,7 @@ layoutsFromPath (SplitP RightP:r) layout@(VerticalP l ri _)   =   layout:layouts
 layoutsFromPath pp l                                      = error
     $"inconsistent layout (layoutsFromPath) " ++ show pp ++ " " ++ show l
 
-getWidgetNameList :: PanePath -> PaneLayout -> [String]
+getWidgetNameList :: PanePath -> PaneLayout -> [Text]
 getWidgetNameList path layout = reverse $ nameList (reverse path) (reverse $ layoutsFromPath path layout)
     where
         nameList [] _ = reverse ["Leksah Main Window","topBox","root"]
@@ -1170,10 +1173,10 @@ getNotebookOrPaned p cf = do
 -- | Get the notebook widget for the given pane path
 --
 getNotebook :: PaneMonad alpha => PanePath -> alpha  Notebook
-getNotebook p = getNotebookOrPaned p (castToNotebook' ("getNotebook " ++ show p))
+getNotebook p = getNotebookOrPaned p (castToNotebook' ("getNotebook " <> T.pack (show p)))
 
-getNotebook' :: PaneMonad alpha => String -> PanePath -> alpha  Notebook
-getNotebook' str p = getNotebookOrPaned p (castToNotebook' ("getNotebook' " ++ str ++ " " ++ show p))
+getNotebook' :: PaneMonad alpha => Text -> PanePath -> alpha  Notebook
+getNotebook' str p = getNotebookOrPaned p (castToNotebook' ("getNotebook' " <> str <> " " <> T.pack (show p)))
 
 
 --
@@ -1219,15 +1222,15 @@ getActiveNotebook = do
 --
 -- | Translates a pane direction to the widget name
 --
-paneDirectionToWidgetName           :: PaneDirection -> String
+paneDirectionToWidgetName           :: PaneDirection -> Text
 paneDirectionToWidgetName TopP      =  "top"
 paneDirectionToWidgetName BottomP   =  "bottom"
 paneDirectionToWidgetName LeftP     =  "left"
 paneDirectionToWidgetName RightP    =  "right"
 
-panePathElementToWidgetName :: PanePathElement -> String
+panePathElementToWidgetName :: PanePathElement -> Text
 panePathElementToWidgetName (SplitP dir)   = paneDirectionToWidgetName dir
-panePathElementToWidgetName (GroupP group) = groupPrefix ++ group
+panePathElementToWidgetName (GroupP group) = groupPrefix <> group
 
 --
 -- | Changes a pane path in the pane map
@@ -1242,7 +1245,7 @@ adjustPanes fromPane toPane  = do
 
 adjustNotebooks :: PaneMonad alpha => PanePath -> PanePath -> alpha ()
 adjustNotebooks fromPane toPane  = do
-    npMap <- trace ("+++ adjustNotebooks from: " ++ show fromPane ++ " to " ++ show toPane)
+    npMap <- trace ("+++ adjustNotebooks from: " <> T.pack (show fromPane) <> " to " <> T.pack (show toPane))
                 getPanePathFromNB
     setPanePathFromNB  (Map.map (\pp ->
         case stripPrefix fromPane pp of
@@ -1267,7 +1270,7 @@ adjustLayoutForSplit  dir path  = do
 --
 -- | Changes the layout for a nest
 --
-adjustLayoutForNest :: PaneMonad alpha => String -> PanePath -> alpha ()
+adjustLayoutForNest :: PaneMonad alpha => Text -> PanePath -> alpha ()
 adjustLayoutForNest group path = do
     layout          <-  getLayoutSt
     let paneLayout  =   layoutFromPath path layout
@@ -1280,7 +1283,7 @@ adjustLayoutForNest group path = do
 --
 -- | Changes the layout for a detach
 --
-adjustLayoutForDetach :: PaneMonad alpha => String -> PanePath -> alpha ()
+adjustLayoutForDetach :: PaneMonad alpha => Text -> PanePath -> alpha ()
 adjustLayoutForDetach id path = do
     layout          <-  getLayoutSt
     let paneLayout  =   layoutFromPath path layout
@@ -1313,7 +1316,7 @@ adjustLayoutForCollapse oldPath  = do
 --
 -- | Changes the layout for a move
 --
-adjustLayoutForGroupMove :: PaneMonad alpha => PanePath -> PanePath -> String -> alpha ()
+adjustLayoutForGroupMove :: PaneMonad alpha => PanePath -> PanePath -> Text -> alpha ()
 adjustLayoutForGroupMove fromPath toPath group = do
     layout <- getLayout
     let layoutToMove = layoutFromPath fromPath layout
@@ -1323,7 +1326,7 @@ adjustLayoutForGroupMove fromPath toPath group = do
 --
 -- | Changes the layout for a remove
 --
-adjustLayoutForGroupRemove :: PaneMonad alpha => PanePath -> String -> alpha ()
+adjustLayoutForGroupRemove :: PaneMonad alpha => PanePath -> Text -> alpha ()
 adjustLayoutForGroupRemove fromPath group = do
     layout <- getLayout
     setLayoutSt (removeGL fromPath layout)
@@ -1375,13 +1378,13 @@ adjustLayout pp layout replace    = adjust' pp layout
 --
 -- | Get the widget from a list of strings
 --
-widgetFromPath :: Widget -> [String] -> IO (Widget)
+widgetFromPath :: Widget -> [Text] -> IO (Widget)
 widgetFromPath w [] = return w
 widgetFromPath w path = do
     children    <- containerGetChildren (castToContainer w)
     chooseWidgetFromPath children path
 
-chooseWidgetFromPath :: [Widget] -> [String] -> IO (Widget)
+chooseWidgetFromPath :: [Widget] -> [Text] -> IO (Widget)
 chooseWidgetFromPath _ [] = error $"Cant't find widget (empty path)"
 chooseWidgetFromPath widgets (h:t) = do
     names       <- mapM widgetGetName widgets
@@ -1390,25 +1393,25 @@ chooseWidgetFromPath widgets (h:t) = do
         Nothing     -> error $"Cant't find widget path " ++ show (h:t) ++ " found only " ++ show names
         Just ind    -> widgetFromPath (widgets !! ind) t
 
-widgetGet :: PaneMonad alpha => [String] -> (Widget -> b) -> alpha  (b)
+widgetGet :: PaneMonad alpha => [Text] -> (Widget -> b) -> alpha  (b)
 widgetGet strL cf = do
     windows <- getWindowsSt
     r <- liftIO $chooseWidgetFromPath (map castToWidget windows) strL
     return (cf r)
 
-widgetGetRel :: Widget -> [String] -> (Widget -> b) -> IO (b)
+widgetGetRel :: Widget -> [Text] -> (Widget -> b) -> IO (b)
 widgetGetRel w sl cf = do
     r <- widgetFromPath w sl
     return (cf r)
 
-getUIAction :: PaneMonad alpha => String -> (Action -> a) -> alpha (a)
+getUIAction :: PaneMonad alpha => Text -> (Action -> a) -> alpha (a)
 getUIAction str f = do
     uiManager <- getUiManagerSt
     liftIO $ do
         findAction <- uiManagerGetAction uiManager str
         case findAction of
             Just act -> return (f act)
-            Nothing  -> error $"getUIAction can't find action " ++ str
+            Nothing  -> error $"getUIAction can't find action " ++ T.unpack str
 
 getThis :: PaneMonad delta =>  (FrameState delta -> alpha) -> delta alpha
 getThis sel = do
@@ -1417,7 +1420,7 @@ getThis sel = do
 setThis :: PaneMonad delta =>  (FrameState delta -> alpha -> FrameState delta) -> alpha -> delta ()
 setThis sel value = do
     st <- getFrameState
-    trace ("!!! setFrameState " ++ show (sel st value)) $ setFrameState (sel st value)
+    trace ("!!! setFrameState " <> T.pack (show $ sel st value)) $ setFrameState (sel st value)
 
 getWindowsSt    = getThis windows
 setWindowsSt    = setThis (\st value -> st{windows = value})
@@ -1440,8 +1443,8 @@ getWindows      = getWindowsSt
 getMainWindow   = liftM head getWindows
 getLayout       = getLayoutSt
 
-castToNotebook' :: GObjectClass obj => String -> obj -> Notebook
+castToNotebook' :: GObjectClass obj => Text -> obj -> Notebook
 castToNotebook' str obj = if obj `isA` gTypeNotebook
                             then castToNotebook obj
-                            else error ("Not a notebook " ++ str)
+                            else error . T.unpack $ "Not a notebook " <> str
 

@@ -1,6 +1,8 @@
-{-# LANGUAGE MultiParamTypeClasses, ScopedTypeVariables, FlexibleContexts, RankNTypes,
-             ExistentialQuantification, TypeFamilies, ImpredicativeTypes #-}
-
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE OverloadedStrings #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  Graphics.UI.Editor.Basics
@@ -39,9 +41,13 @@ module Graphics.UI.Editor.Basics (
 ,   propagateAsChanged
 ) where
 
+import Prelude
+import Text.Show
+
 import Graphics.UI.Gtk
 import Data.Unique
 import Data.IORef
+import Data.Text (Text)
 import Control.Monad
 import Control.Monad.Trans (liftIO)
 
@@ -53,6 +59,12 @@ import Data.Maybe (isJust,fromJust)
 import Unsafe.Coerce (unsafeCoerce)
 import Control.Arrow (first)
 import MyMissing (allOf)
+import qualified Data.Text as T (pack)
+
+fromString = Just . T.pack
+
+ifThenElse True t _ = t
+ifThenElse _ _ f = f
 
 -- ---------------------------------------------------------------------
 -- * Basic Types
@@ -92,7 +104,7 @@ type Editor alpha  =   Parameters -> Notifier
 --
 data GUIEvent = GUIEvent {
     selector :: GUIEventSelector
-,   eventText :: String
+,   eventText :: Text
 ,   gtkReturn :: Bool -- ^ True means that the event has been completely handled,
                       --  gtk shoudn't do any further action about it (Often not
                       --  a good idea
@@ -276,7 +288,7 @@ activateEvent widget (Noti pairRef) mbRegisterFunc eventSel = do
                     Just handlers -> do
                         name <- if (widget `isA` gTypeWidget)
                                     then widgetGetName (castToWidget widget)
-                                    else return "no widget - no name"
+                                    else return "no widget - no name" :: IO Text
                         eventList <- mapM (\f -> do
                             let ev = GUIEvent eventSel "" False
                             f ev)

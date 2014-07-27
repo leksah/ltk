@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE OverloadedStrings #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  Graphics.UI.Editor.Composite
@@ -23,7 +25,7 @@ module Graphics.UI.Editor.Composite (
 ,   ColumnDescr(..)
 
 ,   filesEditor
-,   stringsEditor
+,   textsEditor
 
 ,   versionEditor
 ,   versionRangeEditor
@@ -35,6 +37,8 @@ import Graphics.UI.Gtk
 import Control.Monad
 import Data.IORef
 import Data.Maybe
+import Data.Text (Text)
+import qualified Data.Text as T (pack, unpack, null)
 
 import Default
 import Control.Event
@@ -198,7 +202,7 @@ splitEditor (fstEd,fstPara) (sndEd,sndPara) parameters notifier = do
 -- | An editor with a subeditor which gets active, when a checkbox is selected
 -- or deselected (if the positive Argument is False)
 --
-maybeEditor :: Default beta => (Editor beta, Parameters) -> Bool -> String -> Editor (Maybe beta)
+maybeEditor :: Default beta => (Editor beta, Parameters) -> Bool -> Text -> Editor (Maybe beta)
 maybeEditor (childEdit, childParams) positive boolLabel parameters notifier = do
     coreRef      <- newIORef Nothing
     childRef     <- newIORef Nothing
@@ -316,7 +320,7 @@ maybeEditor (childEdit, childParams) positive boolLabel parameters notifier = do
 -- | An editor with a subeditor which gets active, when a checkbox is selected
 -- or grayed out (if the positive Argument is False)
 --
-disableEditor :: Default beta => (Editor beta, Parameters) -> Bool -> String -> Editor (Bool,beta)
+disableEditor :: Default beta => (Editor beta, Parameters) -> Bool -> Text -> Editor (Bool,beta)
 disableEditor (childEdit, childParams) positive boolLabel parameters notifier = do
     coreRef      <- newIORef Nothing
     childRef     <- newIORef Nothing
@@ -450,7 +454,7 @@ disableEditor (childEdit, childParams) positive boolLabel parameters notifier = 
 -- | An editor with a subeditor which gets active, when a checkbox is selected
 -- or deselected (if the positive Argument is False)
 eitherOrEditor :: (Default alpha, Default beta) => (Editor alpha, Parameters) ->
-                        (Editor beta, Parameters) -> String -> Editor (Either alpha beta)
+                        (Editor beta, Parameters) -> Text -> Editor (Either alpha beta)
 eitherOrEditor (leftEditor,leftParams) (rightEditor,rightParams)
             label2 parameters notifier = do
     coreRef <- newIORef Nothing
@@ -546,7 +550,7 @@ eitherOrEditor (leftEditor,leftParams) (rightEditor,rightParams)
 -- and a nontrivial:
 --  [("Package",\(Dependency str _) -> [cellText := str])
 --  ,("Version",\(Dependency _ vers) -> [cellText := showVersionRange vers])])
-data ColumnDescr row = ColumnDescr Bool [(String,(row -> [AttrOp CellRendererText]))]
+data ColumnDescr row = ColumnDescr Bool [(Text,(row -> [AttrOp CellRendererText]))]
 
 --
 -- | An editor with a subeditor, of which a list of items can be selected
@@ -576,8 +580,8 @@ multisetEditor (ColumnDescr showHeaders columnsDD) (singleEditor, sParams) mbSor
                             return (castToBox b,castToButtonBox bb)
                     (frameS,injS,extS) <- singleEditor sParams cnoti
                     mapM_ (propagateEvent notifier [cnoti]) allGUIEvents
-                    addButton   <- buttonNewWithLabel "Add"
-                    removeButton <- buttonNewWithLabel "Remove"
+                    addButton   <- buttonNewWithLabel ("Add" :: Text)
+                    removeButton <- buttonNewWithLabel ("Remove" :: Text)
                     containerAdd buttonBox addButton
                     containerAdd buttonBox removeButton
                     listStore   <-  listStoreNew ([]:: [alpha])
@@ -689,21 +693,21 @@ multisetEditor (ColumnDescr showHeaders columnsDD) (singleEditor, sParams) mbSor
                 return ()
 
 
-filesEditor :: Maybe FilePath -> FileChooserAction -> String -> Editor [FilePath]
+filesEditor :: Maybe FilePath -> FileChooserAction -> Text -> Editor [FilePath]
 filesEditor fp act label p =
     multisetEditor
-        (ColumnDescr False [("",(\row -> [cellText := row]))])
+        (ColumnDescr False [("",(\row -> [cellText := T.pack row]))])
         (fileEditor fp act label, emptyParams)
         (Just sort)
         (Just (==))
         (paraShadow <<<- ParaShadow ShadowIn $
             paraDirection  <<<- ParaDirection Vertical $ p)
 
-stringsEditor :: (String -> Bool) -> Bool -> Editor [String]
-stringsEditor validation trimBlanks p =
+textsEditor :: (Text -> Bool) -> Bool -> Editor [Text]
+textsEditor validation trimBlanks p =
     multisetEditor
         (ColumnDescr False [("",(\row -> [cellText := row]))])
-        (stringEditor validation trimBlanks, emptyParams)
+        (textEditor validation trimBlanks, emptyParams)
         (Just sort)
         (Just (==))
         (paraShadow <<<- ParaShadow ShadowIn $ p)
@@ -711,25 +715,25 @@ stringsEditor validation trimBlanks p =
 dependencyEditor :: [PackageIdentifier] -> Editor Dependency
 dependencyEditor packages para noti = do
     (wid,inj,ext) <- pairEditor
-        (comboEntryEditor ((sort . nub) (map (display . pkgName) packages))
+        (comboEntryEditor ((sort . nub) (map (T.pack . display . pkgName) packages))
             , paraName <<<- ParaName "Select" $ emptyParams)
         (versionRangeEditor,paraName <<<- ParaName "Version" $ emptyParams)
         (paraDirection <<<- ParaDirection Vertical $ para)
         noti
-    let pinj (Dependency pn@(PackageName s) v) = inj (s,v)
+    let pinj (Dependency pn@(PackageName s) v) = inj (T.pack s,v)
     let pext = do
         mbp <- ext
         case mbp of
             Nothing -> return Nothing
             Just ("",v) -> return Nothing
-            Just (s,v) -> return (Just $ Dependency (PackageName s) v)
+            Just (s,v) -> return (Just $ Dependency (PackageName (T.unpack s)) v)
     return (wid,pinj,pext)
 
 dependenciesEditor :: [PackageIdentifier] -> Editor [Dependency]
 dependenciesEditor packages p noti =
     multisetEditor
-        (ColumnDescr True [("Package",\(Dependency (PackageName str) _) -> [cellText := str])
-                           ,("Version",\(Dependency _ vers) -> [cellText := display vers])])
+        (ColumnDescr True [("Package",\(Dependency (PackageName str) _) -> [cellText := T.pack str])
+                           ,("Version",\(Dependency _ vers) -> [cellText := T.pack $ display vers])])
         (dependencyEditor packages,
             paraOuterAlignment <<<- ParaInnerAlignment (0.0, 0.5, 1.0, 1.0)
                 $ paraInnerAlignment <<<- ParaOuterAlignment (0.0, 0.5, 1.0, 1.0)
@@ -750,7 +754,7 @@ versionRangeEditor para noti = do
         maybeEditor
             ((eitherOrEditor
                 (pairEditor
-                    (comboSelectionEditor v1 show, emptyParams)
+                    (comboSelectionEditor v1 (T.pack . show), emptyParams)
                     (versionEditor, paraName <<<- ParaName "Enter Version" $ emptyParams),
                         (paraDirection <<<- ParaDirection Vertical
                             $ paraName <<<- ParaName "Simple"
@@ -760,7 +764,7 @@ versionRangeEditor para noti = do
                             $ paraInnerPadding <<<- ParaInnerPadding   (0, 0, 0, 0)
                             $ emptyParams))
                 (tupel3Editor
-                    (comboSelectionEditor v2 show, emptyParams)
+                    (comboSelectionEditor v2 (T.pack . show), emptyParams)
                     (versionRangeEditor, paraShadow <<<- ParaShadow ShadowIn $ emptyParams)
                     (versionRangeEditor, paraShadow <<<- ParaShadow ShadowIn $ emptyParams),
                         paraName <<<- ParaName "Complex"
@@ -835,7 +839,7 @@ instance Show Version2 where
 
 versionEditor :: Editor Version
 versionEditor para noti = do
-    (wid,inj,ext) <- stringEditor (\s -> not (null s)) True para noti
+    (wid,inj,ext) <- stringEditor (not . null) True para noti
     let pinj v = inj (display v)
     let pext = do
         s <- ext
