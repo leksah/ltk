@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -XScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  MyMissing
@@ -24,11 +24,11 @@ module MyMissing (
 import Data.Text (Text)
 import qualified Data.Text as T (unpack)
 import Data.List (find,unfoldr)
-import Data.Maybe (isJust)
+import Data.Maybe (fromMaybe, isJust)
 import Data.Char (isSpace)
 
 nonEmptyLines :: String -> [String]
-nonEmptyLines = filter (\line -> isJust $ find (not . isSpace) line) . lines
+nonEmptyLines = filter (isJust . find (not . isSpace)) . lines
 
 
 allOf :: forall alpha. (Bounded alpha, Enum alpha) =>  [alpha]
@@ -38,9 +38,7 @@ allOf = map toEnum [fromEnum (minBound :: alpha) .. fromEnum (maxBound :: alpha)
 -- Convenience methods with error handling
 --
 forceJust :: Maybe alpha -> Text -> alpha
-forceJust mb str = case mb of
-			Nothing -> error (T.unpack str)
-			Just it -> it
+forceJust mb str = fromMaybe (error (T.unpack str)) mb
 
 -- ---------------------------------------------------------------------
 -- Convenience methods with error handling

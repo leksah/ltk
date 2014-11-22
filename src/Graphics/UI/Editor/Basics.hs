@@ -55,7 +55,7 @@ import Graphics.UI.Editor.Parameters
 import Control.Event
 import Data.Map (Map(..))
 import qualified Data.Map as Map  (delete,insert,lookup,empty)
-import Data.Maybe (isJust,fromJust)
+import Data.Maybe (fromMaybe, isJust, fromJust)
 import Unsafe.Coerce (unsafeCoerce)
 import Control.Arrow (first)
 import MyMissing (allOf)
@@ -139,7 +139,7 @@ type GtkHandler = IO Bool
 --
 -- | A type for a function to register a gtk event
 -- |
-type GtkRegFunc = forall o . GObjectClass o => o -> GtkHandler -> IO (Connection)
+type GtkRegFunc = forall o . GObjectClass o => o -> GtkHandler -> IO Connection
 
 --
 -- | The widgets are the real event sources.
@@ -277,24 +277,21 @@ activateEvent
      -> GUIEventSelector
      -> IO ()
 activateEvent widget (Noti pairRef) mbRegisterFunc eventSel = do
-    let registerFunc    =   case mbRegisterFunc of
-                                Just f  ->  f
-                                Nothing ->  getStandardRegFunction eventSel
+    let registerFunc    =   fromMaybe (getStandardRegFunction eventSel) mbRegisterFunc
     cid <- registerFunc widget (do
                 (hi,_) <- readIORef pairRef
                 case Map.lookup eventSel hi of
                     Nothing -> return False
                     Just [] -> return False
                     Just handlers -> do
-                        name <- if (widget `isA` gTypeWidget)
+                        name <- if widget `isA` gTypeWidget
                                     then widgetGetName (castToWidget widget)
                                     else return "no widget - no name" :: IO Text
-                        eventList <- mapM (\f -> do
+                        eventList <- mapM ((\f -> do
                             let ev = GUIEvent eventSel "" False
-                            f ev)
-                                (map snd handlers)
+                            f ev) . snd) handlers
                         let boolList = map gtkReturn eventList
-                        return (foldr (&&) True boolList))
+                        return (and boolList))
     (handerls,ger) <- readIORef pairRef
     let newGer      =   case Map.lookup eventSel ger of
                             Nothing ->  Map.insert eventSel ([cid],([],Map.empty))
@@ -311,7 +308,7 @@ getStandardRegFunction FocusOut         =   \w h -> liftM ConnectC $ on (castToW
 getStandardRegFunction FocusIn          =   \w h -> liftM ConnectC $ on (castToWidget w) focusInEvent $ liftIO h
 getStandardRegFunction ButtonPressed    =   \w h -> liftM ConnectC $ after (castToWidget w) buttonReleaseEvent $ liftIO h
 getStandardRegFunction KeyPressed       =   \w h -> liftM ConnectC $ after (castToWidget w) keyReleaseEvent $ liftIO h
-getStandardRegFunction Clicked          =   \w h -> liftM ConnectC $ on (castToButton w) buttonActivated $ liftIO h >> return ()
+getStandardRegFunction Clicked          =   \w h -> liftM ConnectC $ on (castToButton w) buttonActivated $ void $ liftIO h
 getStandardRegFunction _    =   error "Basic>>getStandardRegFunction: no original GUI event"
 
 registerEvents :: EventSource alpha beta gamma delta => alpha -> [delta] -> (beta -> gamma beta) -> gamma [Maybe Unique]
@@ -321,6 +318,6 @@ registerEvents notifier selectors handler =
 propagateAsChanged
   :: (EventSource alpha GUIEvent m GUIEventSelector) =>
      alpha -> [GUIEventSelector] -> m ()
-propagateAsChanged notifier selectors =
+propagateAsChanged notifier =
     mapM_ (\s -> registerEvent notifier s
-            (\ e -> triggerEvent notifier e{selector = MayHaveChanged})) selectors
+            (\ e -> triggerEvent notifier e{selector = MayHaveChanged}))

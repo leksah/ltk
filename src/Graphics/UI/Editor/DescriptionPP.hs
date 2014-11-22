@@ -34,6 +34,8 @@ import Graphics.UI.Editor.Basics (Applicator(..),Editor(..),Setter(..),Getter(..
 import qualified Data.Text as T (unpack)
 import Data.Monoid ((<>))
 import Data.Text (Text)
+import Data.Maybe (fromMaybe)
+import qualified Control.Arrow as A (Arrow(..))
 
 data FieldDescriptionPP alpha gamma =  FDPP {
         parameters      ::  Parameters
@@ -47,12 +49,12 @@ data FieldDescriptionPP alpha gamma =  FDPP {
 
 type MkFieldDescriptionPP alpha beta gamma =
     Parameters      ->
-    (Printer beta)     ->
-    (Parser beta)      ->
-    (Getter alpha beta)    ->
-    (Setter alpha beta)    ->
-    (Editor beta)      ->
-    (Applicator beta gamma )  ->
+    Printer beta       ->
+    Parser beta        ->
+    Getter alpha beta      ->
+    Setter alpha beta      ->
+    Editor beta        ->
+    Applicator beta gamma     ->
     FieldDescriptionPP alpha gamma
 
 mkFieldPP :: (Eq beta, Monad gamma) => MkFieldDescriptionPP alpha beta gamma
@@ -62,14 +64,12 @@ mkFieldPP parameters printer parser getter setter editor applicator  =
         (\ dat -> (PP.text (case getParameterPrim paraName parameters of
                                     Nothing -> ""
                                     Just str -> T.unpack str) PP.<> PP.colon)
-                PP.$$ (PP.nest 15 (printer (getter dat)))
-                PP.$$ (PP.nest 5 (case getParameterPrim paraSynopsis parameters of
+                PP.$$ PP.nest 15 (printer (getter dat))
+                PP.$$ PP.nest 5 (case getParameterPrim paraSynopsis parameters of
                                     Nothing -> PP.empty
-                                    Just str -> PP.text . T.unpack $ "--" <> str)))
+                                    Just str -> PP.text . T.unpack $ "--" <> str))
         (\ dat -> P.try (do
-            symbol (case getParameterPrim paraName parameters of
-                                    Nothing -> ""
-                                    Just str -> str)
+            symbol (fromMaybe "" (getParameterPrim paraName parameters))
             colon
             val <- parser
             return (setter val dat)))
@@ -77,17 +77,14 @@ mkFieldPP parameters printer parser getter setter editor applicator  =
         (\ newDat oldDat -> do --applicator
             let newField = getter newDat
             let oldField = getter oldDat
-            if newField == oldField
-                then return ()
-                else applicator newField)
+            unless (newField == oldField) $ applicator newField)
 
 extractFieldDescription :: FieldDescriptionPP alpha gamma -> FieldDescription alpha
 extractFieldDescription (VFDPP paras descrs) =  VFD paras (map extractFieldDescription descrs)
 extractFieldDescription (HFDPP paras descrs) =  HFD paras (map extractFieldDescription descrs)
-extractFieldDescription (NFDPP descrsp)      =  NFD (map (\(s,d) ->
-                                                    (s, extractFieldDescription d)) descrsp)
+extractFieldDescription (NFDPP descrsp)      =  NFD (map (A.second extractFieldDescription) descrsp)
 extractFieldDescription (FDPP parameters fieldPrinter fieldParser fieldEditor applicator) =
-    (FD parameters fieldEditor)
+    FD parameters fieldEditor
 
 flattenFieldDescriptionPP :: FieldDescriptionPP alpha gamma -> [FieldDescriptionPP alpha gamma]
 flattenFieldDescriptionPP (VFDPP paras descrs)  =   concatMap flattenFieldDescriptionPP descrs

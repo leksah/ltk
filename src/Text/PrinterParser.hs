@@ -44,7 +44,7 @@ import qualified Text.PrettyPrint as PP
 
 import Graphics.UI.Editor.Parameters
 import Graphics.UI.Editor.Basics
-import Data.Maybe (listToMaybe)
+import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Monoid ((<>))
 import Graphics.UI.Gtk (Color(..))
 import Data.List (foldl')
@@ -71,10 +71,10 @@ data FieldDescriptionS alpha =  FDS {
 
 type MkFieldDescriptionS alpha beta =
     Parameters ->
-    (Printer beta) ->
-    (Parser beta) ->
-    (Getter alpha beta) ->
-    (Setter alpha beta) ->
+    Printer beta ->
+    Parser beta ->
+    Getter alpha beta ->
+    Setter alpha beta ->
     FieldDescriptionS alpha
 
 mkFieldS :: {--Eq beta =>--} MkFieldDescriptionS alpha beta
@@ -82,15 +82,13 @@ mkFieldS parameter printer parser getter setter =
     FDS parameter
         (\ dat -> (PP.text (case getParameterPrim paraName parameter of
                                 Nothing -> ""
-                                Just str -> T.unpack $ str) PP.<> PP.colon)
-                PP.$$ (PP.nest 15 (printer (getter dat)))
-                PP.$$ (PP.nest 5 (case getParameterPrim paraSynopsis parameter of
+                                Just str -> T.unpack str) PP.<> PP.colon)
+                PP.$$ PP.nest 15 (printer (getter dat))
+                PP.$$ PP.nest 5 (case getParameterPrim paraSynopsis parameter of
                                     Nothing -> PP.empty
-                                    Just str -> PP.text . T.unpack $ "--" <> str)))
+                                    Just str -> PP.text . T.unpack $ "--" <> str))
         (\ dat -> try (do
-            symbol (case getParameterPrim paraName parameter of
-                                    Nothing -> ""
-                                    Just str -> str)
+            symbol (fromMaybe "" (getParameterPrim paraName parameter))
             colon
             val <- parser
             return (setter val dat)))
@@ -98,7 +96,7 @@ mkFieldS parameter printer parser getter setter =
 applyFieldParsers ::  a ->  [a ->  CharParser () a] ->  CharParser () a
 applyFieldParsers prefs parseF = do
     eof
-    return (prefs)
+    return prefs
     <|> do
     let parsers = map (\a ->  a prefs) parseF
     newprefs <-  choice parsers
@@ -108,20 +106,20 @@ applyFieldParsers prefs parseF = do
 
 boolParser ::  CharParser () Bool
 boolParser = do
-    (symbol "True" <|> symbol "true")
+    symbol "True" <|> symbol "true"
     return True
     <|> do
-    (symbol "False"<|> symbol "false")
+    symbol "False" <|> symbol "false"
     return False
     <?> "bool parser"
 
 
 readParser ::  Read a =>  CharParser () a
 readParser = do
-    str <- many (noneOf ['\n'])
+    str <- many (noneOf "\n")
     if null str
         then unexpected "read parser on empty string"
-        else do
+        else
             case maybeRead str of
                 Nothing -> unexpected $ "read parser no parse " ++ str
                 Just r -> return r
@@ -141,14 +139,14 @@ pairParser p2 = do
 stringParser ::  CharParser () Text
 stringParser = do
     char '"'
-    str <- many (noneOf ['"'])
+    str <- many (noneOf "\"")
     char '"'
     return (T.pack str)
     <?> "string parser"
 
 lineParser ::  CharParser () Text
 lineParser = do
-    str <- many (noneOf ['\n'])
+    str <- many (noneOf "\n")
     return (T.pack str)
     <?> "line parser"
 
@@ -241,9 +239,8 @@ readFields fn fieldDescrs defaultValue = E.catch (do
 
 parseFields ::  alpha ->  [FieldDescriptionS alpha] ->  P.CharParser () alpha
 parseFields defaultValue descriptions =
-    let parsersF = map fieldParser descriptions in do
-        res <-  applyFieldParsers defaultValue parsersF
-        return res
+    let parsersF = map fieldParser descriptions in
+        applyFieldParsers defaultValue parsersF
         P.<?> "prefs parser"
 
 

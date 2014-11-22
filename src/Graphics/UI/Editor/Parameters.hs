@@ -90,66 +90,66 @@ data Parameter      =   ParaName Text
 emptyParams         ::   [Parameter]
 emptyParams         =   []
 
-paraName                        ::   (Parameter -> (Maybe Text))
+paraName                        ::   Parameter -> Maybe Text
 paraName (ParaName str)         =   Just str
 paraName _                      =   Nothing
 
-paraSynopsis                    ::   (Parameter -> (Maybe Text))
+paraSynopsis                    ::   Parameter -> Maybe Text
 paraSynopsis (ParaSynopsis str) =   Just str
 paraSynopsis _                  =   Nothing
 
-paraShowLabel                    ::   (Parameter -> (Maybe Bool))
+paraShowLabel                    ::   Parameter -> Maybe Bool
 paraShowLabel (ParaShowLabel b)  =   Just b
 paraShowLabel _                  =   Nothing
 
-paraDirection                   ::   (Parameter -> (Maybe Direction))
+paraDirection                   ::   Parameter -> Maybe Direction
 paraDirection (ParaDirection d) =   Just d
 paraDirection _                 =   Nothing
 
-paraShadow                      ::   (Parameter -> (Maybe ShadowType))
+paraShadow                      ::   Parameter -> Maybe ShadowType
 paraShadow (ParaShadow d)       =   Just d
 paraShadow _                    =   Nothing
 
-paraOuterAlignment              ::   (Parameter -> (Maybe (Float,Float,Float,Float)))
+paraOuterAlignment              ::   Parameter -> Maybe (Float,Float,Float,Float)
 paraOuterAlignment (ParaOuterAlignment d) = Just d
 paraOuterAlignment _            =   Nothing
 
-paraInnerAlignment              ::   (Parameter -> (Maybe (Float,Float,Float,Float)))
+paraInnerAlignment              ::   Parameter -> Maybe (Float,Float,Float,Float)
 paraInnerAlignment (ParaInnerAlignment d) = Just d
 paraInnerAlignment _            =   Nothing
 
-paraOuterPadding                ::   (Parameter -> (Maybe (Int,Int,Int,Int)))
+paraOuterPadding                ::   Parameter -> Maybe (Int,Int,Int,Int)
 paraOuterPadding (ParaOuterPadding d) = Just d
 paraOuterPadding _              =   Nothing
 
-paraInnerPadding                ::   (Parameter -> (Maybe (Int,Int,Int,Int)))
+paraInnerPadding                ::   Parameter -> Maybe (Int,Int,Int,Int)
 paraInnerPadding (ParaInnerPadding d) = Just d
 paraInnerPadding _              =   Nothing
 
-paraMinSize                     ::   (Parameter -> (Maybe (Int, Int)))
+paraMinSize                     ::   Parameter -> Maybe (Int, Int)
 paraMinSize (ParaMinSize d)     =   Just d
 paraMinSize _                   =   Nothing
 
-paraHorizontal                  ::   (Parameter -> (Maybe (HorizontalAlign)))
+paraHorizontal                  ::   Parameter -> Maybe HorizontalAlign
 paraHorizontal (ParaHorizontal d) =   Just d
 paraHorizontal _                =   Nothing
 
-paraStockId                     ::   (Parameter -> (Maybe Text))
+paraStockId                     ::   Parameter -> Maybe Text
 paraStockId (ParaStockId str)   =   Just str
 paraStockId _                   =   Nothing
 
-paraMultiSel                    ::   (Parameter -> (Maybe Bool))
+paraMultiSel                    ::   Parameter -> Maybe Bool
 paraMultiSel (ParaMultiSel b)   =   Just b
 paraMultiSel _                  =   Nothing
 
-paraPack                        ::   (Parameter -> (Maybe Packing))
+paraPack                        ::   Parameter -> Maybe Packing
 paraPack (ParaPack b)           =   Just b
 paraPack _                      =   Nothing
 
 --
 -- | Convenience method to get a parameter, or if not set the default parameter
 --
-getParameter :: (Parameter -> (Maybe beta)) -> Parameters -> beta
+getParameter :: (Parameter -> Maybe beta) -> Parameters -> beta
 getParameter selector parameter =
     case getParameterPrim selector parameter of
         Just ele       -> ele
@@ -157,13 +157,13 @@ getParameter selector parameter =
                             Just ele       -> ele
                             _              -> error "default parameter not defined"
 
-getParameterPrim :: (Parameter -> (Maybe beta)) -> Parameters -> Maybe beta
+getParameterPrim :: (Parameter -> Maybe beta) -> Parameters -> Maybe beta
 getParameterPrim selector parameter =
     case filter isJust $ map selector parameter of
-        (Just ele) : _ -> Just ele
-        _              -> Nothing
+        Just ele : _ -> Just ele
+        _            -> Nothing
 
-(<<<-) :: (Parameter -> (Maybe beta)) -> Parameter -> Parameters -> Parameters
+(<<<-) :: (Parameter -> Maybe beta) -> Parameter -> Parameters -> Parameters
 (<<<-) selector para  params = para : filter (isNothing . selector) params
 
 defaultParameters :: Parameters

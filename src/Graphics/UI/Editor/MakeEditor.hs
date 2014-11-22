@@ -39,7 +39,7 @@ import Control.Event
 import Graphics.UI.Editor.Parameters
 import Graphics.UI.Editor.Basics
 --import Graphics.UI.Frame.ViewFrame
-import Data.Maybe (isNothing)
+import Data.Maybe (fromMaybe, isNothing)
 import Data.IORef (newIORef)
 import qualified Graphics.UI.Gtk.Gdk.Events as GTK (Event(..))
 
@@ -48,9 +48,9 @@ import qualified Graphics.UI.Gtk.Gdk.Events as GTK (Event(..))
 --
 type MkFieldDescription alpha beta =
     Parameters ->
-    (Getter alpha beta) ->
-    (Setter alpha beta) ->
-    (Editor beta) ->
+    Getter alpha beta ->
+    Setter alpha beta ->
+    Editor beta ->
     FieldDescription alpha
 
 --
@@ -87,7 +87,7 @@ buildEditor (VFD paras descrs) v =   buildBoxEditor descrs Vertical v
 buildEditor (NFD pairList)     v =   do
     nb <- newNotebook
     notebookSetShowTabs nb False
-    resList <- mapM (\d -> buildEditor d v) (map snd pairList)
+    resList <- mapM ((`buildEditor` v) . snd) pairList
     let (widgets, setInjs, getExts, notifiers) = unzip4 resList
     notifier <- emptyNotifier
     mapM_ (\ (labelString, widget) -> do
@@ -122,15 +122,15 @@ buildEditor (NFD pairList)     v =   do
     scrolledWindowSetPolicy sw PolicyNever PolicyAutomatic
     boxPackStart hb sw PackNatural 0
     boxPackEnd hb nb PackGrow 7
-    let newInj = (\v -> mapM_ (\ setInj -> setInj v) setInjs)
-    let newExt = (\v -> extract v getExts)
+    let newInj v = mapM_ (\ setInj -> setInj v) setInjs
+    let newExt v = extract v getExts
     mapM_ (propagateEvent notifier notifiers) allGUIEvents
     return (castToWidget hb, newInj, newExt, notifier)
 
 buildBoxEditor :: [FieldDescription alpha] -> Direction -> alpha
     -> IO (Widget, Injector alpha , alpha -> Extractor alpha , Notifier)
 buildBoxEditor descrs dir v = do
-    resList <- mapM (\d -> buildEditor d v)  descrs
+    resList <- mapM (`buildEditor` v) descrs
     notifier <- emptyNotifier
     let (widgets, setInjs, getExts, notifiers) = unzip4 resList
     hb <- case dir of
@@ -140,13 +140,11 @@ buildBoxEditor descrs dir v = do
             Vertical -> do
                 b <- vBoxNew False 0
                 return (castToBox b)
-    let newInj = (\v -> mapM_ (\ setInj -> setInj v) setInjs)
-    let fieldNames = map (\fd -> case getParameterPrim paraName (parameters fd) of
-                                    Just s -> s
-                                    Nothing -> "Unnamed") descrs
-    let packParas = map (\fd -> getParameter paraPack (parameters fd)) descrs
+    let newInj v = mapM_ (\ setInj -> setInj v) setInjs
+    let fieldNames = map (fromMaybe "Unnamed" . getParameterPrim paraName . parameters) descrs
+    let packParas = map (getParameter paraPack . parameters) descrs
     mapM_ (propagateEvent notifier notifiers) allGUIEvents
-    let newExt = (\v -> extractAndValidate v getExts fieldNames notifier)
+    let newExt v = extractAndValidate v getExts fieldNames notifier
     mapM_ (\ (w,p) -> boxPackStart hb w p 0) $ zip widgets packParas
     return (castToWidget hb, newInj, newExt, notifier)
 
@@ -170,14 +168,14 @@ mkField parameters getter setter editor =
         (\ dat -> do
             noti <- emptyNotifier
             (widget,inj,ext) <- editor parameters noti
-            let pext = (\a -> do
+            let pext a = do
                             b <- ext
                             case b of
                                 Just b -> return (Just (setter b a))
-                                Nothing -> return Nothing)
+                                Nothing -> return Nothing
             inj (getter dat)
             return (widget,
-                    (\a -> inj (getter a)),
+                    inj . getter,
                     pext,
                     noti))
 
@@ -193,9 +191,8 @@ mkEditor injectorC extractor parameters notifier = do
     frameSetShadowType frame (getParameter paraShadow parameters)
     case getParameter paraName parameters of
         "" -> return ()
-        str -> if getParameter paraShowLabel parameters
-                then frameSetLabel frame str
-                else return ()
+        str -> when (getParameter paraShowLabel parameters) $
+                  frameSetLabel frame str
 
     containerAdd outerAlig frame
     let (xalign, yalign, xscale, yscale) =  getParameter paraInnerAlignment parameters
@@ -223,10 +220,10 @@ extractAndValidate val getExts fieldNames notifier = do
     if null errors
         then return (Just newVal)
         else do
-            triggerEvent notifier (GUIEvent {
+            triggerEvent notifier GUIEvent {
                     selector = ValidationError,
                     eventText = mconcat (intersperse ", " errors),
-                    gtkReturn = True})
+                    gtkReturn = True}
             return Nothing
 
 extract :: alpha -> [alpha -> Extractor alpha] -> IO (Maybe alpha)

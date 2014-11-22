@@ -45,5 +45,4 @@ Library
                  Text.PrinterParser
     exposed: True
     buildable: True
-    extensions: CPP, FlexibleInstances, BangPatterns
     hs-source-dirs: src

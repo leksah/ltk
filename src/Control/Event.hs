@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -XMultiParamTypeClasses -XFunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  Control.Event
@@ -46,7 +46,7 @@ class (Monad gamma, Event beta delta) => EventSource alpha beta gamma delta
         | alpha -> beta, alpha -> gamma where
     getHandlers     ::  alpha -> gamma (Handlers beta gamma delta)
     setHandlers     ::  alpha -> Handlers beta gamma delta -> gamma ()
-    myUnique        ::  alpha -> gamma (Unique)
+    myUnique        ::  alpha -> gamma Unique
 
     -- | Reimplement this in instances to make triggering of events possible
     canTriggerEvent :: alpha -> delta -> Bool
