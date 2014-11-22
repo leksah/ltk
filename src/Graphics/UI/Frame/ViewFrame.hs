@@ -111,6 +111,7 @@ import Graphics.UI.Gtk.Gdk.EventM (Modifier(..))
 #ifdef MIN_VERSION_gtk3
 import Graphics.UI.Gtk.General.CssProvider (cssProviderNew, cssProviderLoadFromString)
 import Graphics.UI.Gtk.General.StyleContext (styleContextAddProvider)
+import Graphics.UI.Gtk.General.Enums (Align(..))
 #endif
 import MyMissing (forceJust, forceHead)
 import Graphics.UI.Gtk.Gdk.EventM (TimeStamp(..))
@@ -258,10 +259,17 @@ mkLabelBox lbl paneName = do
             "-GtkButton-inner-border: 0px;\n" <>
             "-GtkWidget-focus-line-width : 0px;\n" <>
             "-GtkWidget-focus-padding : 0px;\n" <>
-            "padding: 2px;\n" <>
-            "}" :: Text)
+            "padding: 0px;\n" <>
+            "border-width: 0px;\n" <>
+            "}\n" <>
+            "GtkImage {\n" <>
+            "padding: 0px;\n" <>
+            "}\n" :: Text)
         context <- widgetGetStyleContext tabButton
         styleContextAddProvider context provider 600
+        context <- widgetGetStyleContext image
+        styleContextAddProvider context provider 600
+        widgetSetVAlign lbl AlignBaseline
 #endif
         containerSetBorderWidth tabButton 0
         containerAdd tabButton image

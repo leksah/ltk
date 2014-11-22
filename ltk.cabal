@@ -32,10 +32,10 @@ Library
                ghc -any
 
     if flag(gtk3)
-      build-depends: gtk3 >=0.13.0.0 && <0.14
+      build-depends: gtk3 >=0.13.1 && <0.14
       cpp-options:   -DMIN_VERSION_gtk=MIN_VERSION_gtk3
     else
-      build-depends: gtk >=0.13.0.0 && <0.14
+      build-depends: gtk >=0.13.1 && <0.14
 
     exposed-modules: Default MyMissing Control.Event
                  Graphics.UI.Editor.Basics Graphics.UI.Editor.Composite
