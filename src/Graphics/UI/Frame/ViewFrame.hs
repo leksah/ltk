@@ -95,6 +95,40 @@ module Graphics.UI.Frame.ViewFrame (
 ) where
 
 import Graphics.UI.Gtk
+       (castToNotebook, uiManagerGetAction, Action, Paned,
+        selectionDataGetText, SelectionDataM, InfoId, Point, DragContext,
+        dragDataReceived, dragDestSetTargetList, dragDestSet,
+        notebookSetPopup, notebookSetScrollable, notebookNew,
+        windowPresent, widgetVisible, notebookRemovePage, Notebook,
+        windowGetScreen, Screen, castToWindow, gTypeWindow,
+        widgetGetToplevel, deleteEvent, widgetGetAllocation,
+        windowSetDefaultSize, widgetName, windowNew, Widget,
+        dialogResponse, dialogGetActionArea, castToHBox,
+        dialogGetContentArea, windowTitle, windowTransientFor, dialogNew,
+        Window, widgetDestroy, dialogRun, messageDialogNew, castToWidget,
+        switchPage, widgetGrabFocus, castToVBox, boxReorderChild,
+        castToBox, notebookSetMenuLabel, notebookSetTabLabel,
+        notebookInsertPage, panedPack1, castToContainer, containerRemove,
+        notebookPageNum, panedPack2, hPanedNew, castToPaned, vPanedNew,
+        widgetGetParent, notebookGetCurrentPage, notebookSetTabPos,
+        PositionType, notebookSetShowTabs, notebookGetShowTabs,
+        castToLabel, containerGetChildren, castToBin, binGetChild,
+        notebookGetTabLabel, labelSetMarkup, labelSetUseMarkup,
+        buttonActivated, selectionDataSetText, dragDataGet,
+        dragSourceSetTargetList, targetListAddTextTargets, targetListNew,
+        dragSourceSet, boxPackStart, containerAdd, containerSetBorderWidth,
+        widgetSetVAlign, widgetGetStyleContext, stockClose,
+        imageNewFromStock, imageNewFromPixbuf, iconThemeLoadIcon,
+        iconThemeGetDefault, buttonSetAlignment, buttonSetRelief,
+        buttonSetFocusOnClick, buttonNew, hBoxNew,
+        eventBoxSetVisibleWindow, eventBoxNew, miscSetPadding, castToMisc,
+        miscSetAlignment, EventBox, notebookSetCurrentPage, widgetShowAll,
+        notebookInsertPageMenu, widgetGetName, notebookGetNthPage,
+        notebookGetNPages, labelNew, Label, WidgetClass, NotebookClass,
+        widgetSetName, IconSize(..), ResponseId(..), Rectangle(..),
+        DragAction(..), DestDefaults(..), PositionType(..), Packing(..),
+        ReliefStyle(..), IconLookupFlags(..), after, on, ButtonsType(..),
+        MessageType(..), AttrOp(..), get, set)
 import qualified Data.Map as Map
 import Data.List
 import Data.Maybe
@@ -112,6 +146,8 @@ import Graphics.UI.Gtk.Gdk.EventM (Modifier(..))
 import Graphics.UI.Gtk.General.CssProvider (cssProviderNew, cssProviderLoadFromString)
 import Graphics.UI.Gtk.General.StyleContext (styleContextAddProvider)
 import Graphics.UI.Gtk.General.Enums (Align(..))
+#else
+import Graphics.UI.Gtk (rcParseString)
 #endif
 import MyMissing (forceJust, forceHead)
 import Graphics.UI.Gtk.Gdk.EventM (TimeStamp(..))
@@ -269,6 +305,7 @@ mkLabelBox lbl paneName = do
         styleContextAddProvider context provider 600
         context <- widgetGetStyleContext image
         styleContextAddProvider context provider 600
+        widgetSetVAlign tabButton AlignCenter
         widgetSetVAlign lbl AlignBaseline
 #endif
         containerSetBorderWidth tabButton 0
