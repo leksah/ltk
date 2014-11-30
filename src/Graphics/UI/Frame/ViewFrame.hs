@@ -306,7 +306,7 @@ mkLabelBox lbl paneName = do
         context <- widgetGetStyleContext image
         styleContextAddProvider context provider 600
         widgetSetVAlign tabButton AlignCenter
-        widgetSetVAlign lbl AlignBaseline
+        widgetSetVAlign lbl AlignCenter
 #endif
         containerSetBorderWidth tabButton 0
         containerAdd tabButton image
