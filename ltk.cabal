@@ -1,5 +1,5 @@
 name: ltk
-version: 0.14.0.2
+version: 0.14.3.0
 cabal-version: >= 1.8
 build-type: Simple
 license: GPL
@@ -32,10 +32,10 @@ Library
                ghc -any
 
     if flag(gtk3)
-      build-depends: gtk3 >=0.13.1 && <0.14
+      build-depends: gtk3 >=0.13.2 && <0.14
       cpp-options:   -DMIN_VERSION_gtk=MIN_VERSION_gtk3
     else
-      build-depends: gtk >=0.13.1 && <0.14
+      build-depends: gtk >=0.13.2 && <0.14
 
     exposed-modules: Default MyMissing Control.Event
                  Graphics.UI.Editor.Basics Graphics.UI.Editor.Composite

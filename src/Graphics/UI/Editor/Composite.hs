@@ -654,7 +654,7 @@ multisetEditor (ColumnDescr showHeaders columnsDD) (singleEditor, sParams) mbSor
                                         mbCol <- treeViewGetColumn treeView 0
                                         case mbCol of
                                             Nothing  -> return ()
-                                            Just col -> treeViewScrollToCell treeView [idx] col Nothing
+                                            Just col -> treeViewScrollToCell treeView (Just [idx]) Nothing Nothing
                                     Nothing -> return ()
                             Nothing -> return ()
                     on removeButton buttonActivated $ do
