@@ -150,7 +150,8 @@ import Graphics.UI.Gtk.General.Enums (Align(..))
 import Graphics.UI.Gtk (rcParseString)
 #endif
 import MyMissing (forceJust, forceHead)
-import Graphics.UI.Gtk.Gdk.EventM (TimeStamp(..))
+import Graphics.UI.Gtk.Gdk.EventM
+       (eventModifierMouse, TimeStamp(..))
 import Graphics.UI.Editor.MakeEditor
     (mkField, FieldDescription(..), buildEditor)
 import Graphics.UI.Editor.Simple (stringEditor, textEditor, okCancelFields)
@@ -166,6 +167,7 @@ import Control.Applicative ((<$>))
 import qualified Control.Monad.Reader as Gtk (liftIO)
 import qualified Data.Text as T (pack, stripPrefix, unpack)
 import Data.Monoid ((<>))
+import Graphics.UI.Gtk.Abstract.Widget (buttonReleaseEvent)
 
 --import Debug.Trace (trace)
 trace (a::Text) b = b
@@ -237,8 +239,8 @@ getPanes = do
                 $ map (\(PaneC p) -> cast p)
                     $ Map.elems panes')
 
-notebookInsertOrdered :: PaneMonad alpha => (NotebookClass self, WidgetClass child)		
-    => self	
+notebookInsertOrdered :: PaneMonad alpha => (NotebookClass self, WidgetClass child)
+    => self
     -> child	-- child - the Widget to use as the contents of the page.
     -> Text
     -> Maybe Label	-- the label for the page as Text or Label
@@ -311,8 +313,8 @@ mkLabelBox lbl paneName = do
         containerSetBorderWidth tabButton 0
         containerAdd tabButton image
 
-        boxPackStart innerBox tabButton PackNatural 0
         boxPackStart innerBox lbl       PackGrow 0
+        boxPackStart innerBox tabButton PackNatural 5
 
         containerAdd labelBox innerBox
         dragSourceSet labelBox [Button1] [ActionCopy,ActionMove]
@@ -325,6 +327,11 @@ mkLabelBox lbl paneName = do
         return (tabButton,labelBox)
     cl <- runInIO closeHandler
     liftIO $ on tb buttonActivated (cl ())
+    liftIO $ on lb buttonReleaseEvent $ do
+        modifiers <- eventModifierMouse
+        let middleButton = Button2
+        when (middleButton `elem` modifiers) (liftIO $ cl ())
+        return False
 
     return lb
     where
@@ -358,7 +365,7 @@ markLabel nb topWidget modified = do
                 Nothing -> return ()
                 Just container -> do
                     children <- containerGetChildren container
-                    let label = castToLabel $ forceHead (tail children) "ViewFrame>>markLabel: empty children"
+                    let label = castToLabel $ forceHead children "ViewFrame>>markLabel: empty children"
                     (text :: Text) <- widgetGetName topWidget
                     labelSetUseMarkup (castToLabel label) True
                     labelSetMarkup (castToLabel label)
@@ -1069,7 +1076,7 @@ getBestPathForId  id = do
     p <- panePathForGroup id
     l <- getLayout
     return (getBestPanePath p l)
-		
+
 --
 -- | Construct a new notebook
 --
