@@ -76,12 +76,10 @@ instance ButtonClass Widget
 -- | An invisible editor without any effect
 --
 noEditor :: alpha -> Editor alpha
-noEditor proto parameters notifier =
+noEditor proto =
     mkEditor
         (\ widget _ -> return ())
         (return (Just proto))
-        parameters
-        notifier
 
 --
 -- | Editor for a boolean value in the form of a check button
@@ -164,11 +162,15 @@ enumEditor labels parameters notifier = do
             case core of
                 Nothing  -> do
                     box <- vBoxNew True 2
-                    let label0 = if length labels > 0 then labels !! 0 else T.pack (show (vals !! 0))
+                    let label0 = case labels ++ map (T.pack . show) vals of
+                                    (x:_) -> x
+                                    _     -> error "enumEditor"
                     button0 <- radioButtonNewWithLabel label0
                     buttons <- mapM (\ v -> do
                         let n = fromEnum v
-                        let label = if length labels > n then labels !! n else T.pack (show v)
+                        let label = case drop n labels of
+                                        (l:_) -> l
+                                        _     -> T.pack (show v)
                         radio <- if n == 0
                                     then return button0
                                     else radioButtonNewWithLabelFromWidget button0 label
@@ -183,17 +185,17 @@ enumEditor labels parameters notifier = do
                              buttons)) (Clicked:genericGUIEvents)
                     propagateAsChanged notifier [Clicked]
                     mapM_ (\(b,n) -> toggleButtonSetActive b (n == fromEnum enumValue))
-                                (zip buttons [0..length buttons - 1])
+                                (zip buttons [0..])
                     writeIORef coreRef (Just buttons)
-                Just buttons -> do
+                Just buttons ->
                     mapM_ (\(b,n) -> toggleButtonSetActive b (n == fromEnum enumValue))
-                                (zip buttons [0..length buttons - 1]))
+                                (zip buttons [0..]))
         (do core <- readIORef coreRef
             case core of
                 Nothing -> return Nothing
                 Just buttons -> do
                     boolArray <- mapM toggleButtonGetActive buttons
-                    let mbInd =  findIndex (== True) boolArray
+                    let mbInd =  elemIndex True boolArray
                     let res = case mbInd of
                                 Nothing -> Nothing
                                 Just i -> Just (vals !! i)
@@ -336,10 +338,10 @@ intEditor (min, max, step) parameters notifier = do
                 Nothing  -> do
                     spin <- spinButtonNewWithRange min max step
                     widgetSetName spin (getParameter paraName parameters)
-                    mapM_ (activateEvent (castToWidget spin) notifier Nothing) (genericGUIEvents)
+                    mapM_ (activateEvent (castToWidget spin) notifier Nothing) genericGUIEvents
                     activateEvent (castToWidget spin) notifier
                         (Just (\ w h -> do
-                            res     <-  afterValueSpinned (castToSpinButton w) (h >> return ())
+                            res     <-  afterValueSpinned (castToSpinButton w) (void h)
                             return (unsafeCoerce res))) MayHaveChanged
                     containerAdd widget spin
                     spinButtonSetValue spin (fromIntegral v)
@@ -405,12 +407,12 @@ comboSelectionEditor list showF parameters notifier = do
                 Nothing  -> do
                     combo <- comboBoxNewText
                     widgetSetSizeRequest combo 200 (-1)
-                    mapM_ (\o -> comboBoxAppendText combo (showF o)) list
+                    mapM_ (comboBoxAppendText combo . showF) list
                     widgetSetName combo (getParameter paraName parameters)
                     mapM_ (activateEvent (castToWidget combo) notifier Nothing) genericGUIEvents
                     activateEvent (castToWidget combo) notifier
                         (Just (\ w h -> do
-                            res     <-  on (castToComboBox w) changed (h >> return ())
+                            res     <-  on (castToComboBox w) changed (void h)
                             return (unsafeCoerce res))) MayHaveChanged
                     comboBoxSetActive combo 1
                     containerAdd widget combo
@@ -452,7 +454,7 @@ comboEntryEditor list parameters notifier = do
                     mapM_ (activateEvent (castToWidget combo) notifier Nothing) genericGUIEvents
                     activateEvent (castToWidget combo) notifier
                         (Just (\ w h -> do
-                            res     <-  on (castToComboBox w) changed (h >> return ())
+                            res     <-  on (castToComboBox w) changed (void h)
                             return (unsafeCoerce res))) MayHaveChanged
                     comboBoxSetActive combo 1
                     containerAdd widget combo
@@ -561,7 +563,7 @@ staticListMultiEditor list showF parameters notifier = do
                         $ \row -> [ cellText := showF (snd row)]
                     treeViewSetHeadersVisible listView False
                     listStoreClear listStore
-                    mapM_ (listStoreAppend listStore) $ map (\e -> (elem e objs,e)) list
+                    mapM_ (listStoreAppend listStore . (\ e -> (e `elem` objs, e))) list
                     let minSize =   getParameter paraMinSize parameters
                     uncurry (widgetSetSizeRequest listView) minSize
                     sw          <-  scrolledWindowNew Nothing Nothing
@@ -578,7 +580,7 @@ staticListMultiEditor list showF parameters notifier = do
                         listStoreSetValue listStore i (not (fst val),snd val)
                     listView `on` keyPressEvent $ do
                         name <- eventKeyName
-                        liftIO $ do
+                        liftIO $
                             case name of
                                 "Return" -> do
                                     sel <- treeViewGetSelection listView
@@ -590,15 +592,15 @@ staticListMultiEditor list showF parameters notifier = do
                                 _ -> return False
                     writeIORef coreRef (Just (listView,listStore))
                 Just (listView,listStore) -> do
-                    let model = map (\e -> (elem e objs,e)) list
+                    let model = map (\e -> (e `elem` objs,e)) list
                     listStoreClear listStore
-                    mapM_ (listStoreAppend listStore) $ map (\e -> (elem e objs,e)) list)
+                    mapM_ (listStoreAppend listStore . (\ e -> (e `elem` objs, e))) list)
         (do core <- readIORef coreRef
             case core of
                 Nothing -> return Nothing
                 Just (listView,listStore) -> do
                     model <- listStoreToList listStore
-                    return (Just (map snd $ filter (\e -> fst e) model)))
+                    return (Just (map snd $ filter fst model)))
         parameters
         notifier
 
@@ -621,9 +623,9 @@ staticListEditor list showF parameters notifier = do
                     propagateAsChanged notifier [KeyPressed,ButtonPressed]
                     sel <- treeViewGetSelection listView
                     treeSelectionSetMode sel
-                        (case getParameter paraMultiSel parameters of
-                            True  -> SelectionMultiple
-                            False -> SelectionSingle)
+                        (if getParameter paraMultiSel parameters
+                            then SelectionMultiple
+                            else SelectionSingle)
                     renderer <- cellRendererTextNew
                     col <- treeViewColumnNew
                     treeViewAppendColumn listView col
@@ -639,9 +641,7 @@ staticListEditor list showF parameters notifier = do
                     containerAdd sw listView
                     scrolledWindowSetPolicy sw PolicyAutomatic PolicyAutomatic
                     containerAdd widget sw
-#ifdef MIN_VERSION_gtk3
                     scrolledWindowSetMinContentHeight sw (snd minSize)
-#endif
                     treeSelectionUnselectAll sel
                     let mbInd = elemIndex obj list
                     case mbInd of
@@ -742,10 +742,10 @@ fileEditor mbFilePath action buttonName parameters notifier = do
 --                                Nothing -> fn
 --                                Just rel -> makeRelative rel fn
                 entrySetText entry (T.pack fn)
-                triggerEvent notifier (GUIEvent {
+                triggerEvent notifier GUIEvent {
                     selector = MayHaveChanged,
                     eventText = "",
-                    gtkReturn = True})
+                    gtkReturn = True}
                 return (e{gtkReturn=True})
 
 --
@@ -764,7 +764,7 @@ fontEditor parameters notifier = do
                     mapM_ (activateEvent (castToWidget fs) notifier Nothing) (Clicked: genericGUIEvents)
                     activateEvent (castToWidget fs) notifier
                         (Just (\ w h -> do
-                            res     <-  onFontSet (castToFontButton w) (h >> return ())
+                            res     <-  onFontSet (castToFontButton w) (void h)
                             return (unsafeCoerce res))) MayHaveChanged
                     containerAdd widget fs
                     case mbValue of
@@ -801,7 +801,7 @@ colorEditor parameters notifier = do
                     mapM_ (activateEvent (castToWidget cs) notifier Nothing) (Clicked: genericGUIEvents)
                     activateEvent (castToWidget cs) notifier
                         (Just (\ w h -> do
-                            res     <-  onColorSet (castToColorButton w) (h >> return ())
+                            res     <-  onColorSet (castToColorButton w) (void h)
                             return (unsafeCoerce res))) MayHaveChanged
                     containerAdd widget cs
                     colorButtonSetColor cs c

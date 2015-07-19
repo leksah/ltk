@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 -----------------------------------------------------------------------------
 --
@@ -116,9 +115,9 @@ tupel3Editor p1 p2 p3 parameters notifier = do
     noti2   <- emptyNotifier
     noti3   <- emptyNotifier
     mapM_ (propagateEvent notifier [noti1,noti2,noti3]) (Clicked : allGUIEvents)
-    r1@(frame1,inj1,ext1) <- (fst p1) (snd p1) noti1
-    r2@(frame2,inj2,ext2) <- (fst p2) (snd p2) noti2
-    r3@(frame3,inj3,ext3) <- (fst p3) (snd p3) noti3
+    r1@(frame1,inj1,ext1) <- fst p1 (snd p1) noti1
+    r2@(frame2,inj2,ext2) <- fst p2 (snd p2) noti2
+    r3@(frame3,inj3,ext3) <- fst p3 (snd p3) noti3
     mkEditor
         (\widget (v1,v2,v3) -> do
             core <- readIORef coreRef
@@ -295,7 +294,7 @@ maybeEditor (childEdit, childParams) positive boolLabel parameters notifier = do
                                 hasChild <- hasChildEditor childRef
                                 (childWidget,inj2,ext2) <- getChildEditor childRef childEdit childParams cNoti
                                 children <- containerGetChildren vBox
-                                unless (elem childWidget children) $
+                                unless (childWidget `elem` children) $
                                     boxPackEnd vBox childWidget PackNatural 0
                                 inj2 getDefault
                                 widgetShowAll childWidget
@@ -550,7 +549,7 @@ eitherOrEditor (leftEditor,leftParams) (rightEditor,rightParams)
 -- and a nontrivial:
 --  [("Package",\(Dependency str _) -> [cellText := str])
 --  ,("Version",\(Dependency _ vers) -> [cellText := showVersionRange vers])])
-data ColumnDescr row = ColumnDescr Bool [(Text,(row -> [AttrOp CellRendererText]))]
+data ColumnDescr row = ColumnDescr Bool [(Text, row -> [AttrOp CellRendererText])]
 
 --
 -- | An editor with a subeditor, of which a list of items can be selected
@@ -588,12 +587,12 @@ multisetEditor (ColumnDescr showHeaders columnsDD) (singleEditor, sParams) mbSor
                     activateEvent listStore notifier
                         (Just (\ w h -> do
                             res     <-  after (castToTreeModel w) rowInserted (\ _ _ ->
-                                h >> return ())
+                                void h)
                             return (ConnectC res))) MayHaveChanged
                     activateEvent listStore notifier
                         (Just (\ w h -> do
                             res     <-  after (castToTreeModel w) rowDeleted (\ _ ->
-                                h >> return ())
+                                void h)
                             return (ConnectC res))) MayHaveChanged
                     treeView        <-  treeViewNewWithModel listStore
                     let minSize =   getParameter paraMinSize parameters
@@ -601,9 +600,7 @@ multisetEditor (ColumnDescr showHeaders columnsDD) (singleEditor, sParams) mbSor
                     sw          <-  scrolledWindowNew Nothing Nothing
                     containerAdd sw treeView
                     scrolledWindowSetPolicy sw PolicyAutomatic PolicyAutomatic
-#ifdef MIN_VERSION_gtk3
                     scrolledWindowSetMinContentHeight sw (snd minSize)
-#endif
                     sel         <-  treeViewGetSelection treeView
                     treeSelectionSetMode sel SelectionSingle
                     mapM_ (\(str,func) -> do
@@ -635,10 +632,9 @@ multisetEditor (ColumnDescr showHeaders columnsDD) (singleEditor, sParams) mbSor
                                     Nothing         -> return ()
                                     Just replaceF   -> do
                                          cont <- listStoreToList listStore
-                                         mapM_ (listStoreRemove listStore)
-                                            $ map fst
-                                                $ filter (\(_,e) -> replaceF v e)
-                                                    $ zip [0..] cont
+                                         mapM_ (listStoreRemove listStore . fst)
+                                            . filter (\(_,e) -> replaceF v e)
+                                                $ zip [0..] cont
                                 case mbSort of
                                     Nothing    -> do
                                         listStoreAppend listStore v
@@ -696,7 +692,7 @@ multisetEditor (ColumnDescr showHeaders columnsDD) (singleEditor, sParams) mbSor
 filesEditor :: Maybe FilePath -> FileChooserAction -> Text -> Editor [FilePath]
 filesEditor fp act label p =
     multisetEditor
-        (ColumnDescr False [("",(\row -> [cellText := T.pack row]))])
+        (ColumnDescr False [("", \ row -> [cellText := T.pack row])])
         (fileEditor fp act label, emptyParams)
         (Just sort)
         (Just (==))
@@ -706,7 +702,7 @@ filesEditor fp act label p =
 textsEditor :: (Text -> Bool) -> Bool -> Editor [Text]
 textsEditor validation trimBlanks p =
     multisetEditor
-        (ColumnDescr False [("",(\row -> [cellText := row]))])
+        (ColumnDescr False [("", \ row -> [cellText := row])])
         (textEditor validation trimBlanks, emptyParams)
         (Just sort)
         (Just (==))
@@ -730,7 +726,7 @@ dependencyEditor packages para noti = do
     return (wid,pinj,pext)
 
 dependenciesEditor :: [PackageIdentifier] -> Editor [Dependency]
-dependenciesEditor packages p noti =
+dependenciesEditor packages p =
     multisetEditor
         (ColumnDescr True [("Package",\(Dependency (PackageName str) _) -> [cellText := T.pack str])
                            ,("Version",\(Dependency _ vers) -> [cellText := T.pack $ display vers])])
@@ -746,41 +742,40 @@ dependenciesEditor packages p noti =
                     $ paraDirection  <<<-  ParaDirection Vertical
                         $ paraPack <<<- ParaPack PackGrow
                             $ p)
-        noti
 
 versionRangeEditor :: Editor VersionRange
 versionRangeEditor para noti = do
     (wid,inj,ext) <-
         maybeEditor
-            ((eitherOrEditor
-                (pairEditor
-                    (comboSelectionEditor v1 (T.pack . show), emptyParams)
-                    (versionEditor, paraName <<<- ParaName "Enter Version" $ emptyParams),
-                        (paraDirection <<<- ParaDirection Vertical
-                            $ paraName <<<- ParaName "Simple"
-                            $ paraOuterAlignment <<<- ParaOuterAlignment  (0.0, 0.0, 0.0, 0.0)
-                            $ paraOuterPadding <<<- ParaOuterPadding    (0, 0, 0, 0)
-                            $ paraInnerAlignment <<<- ParaInnerAlignment  (0.0, 0.0, 0.0, 0.0)
-                            $ paraInnerPadding <<<- ParaInnerPadding   (0, 0, 0, 0)
-                            $ emptyParams))
-                (tupel3Editor
-                    (comboSelectionEditor v2 (T.pack . show), emptyParams)
-                    (versionRangeEditor, paraShadow <<<- ParaShadow ShadowIn $ emptyParams)
-                    (versionRangeEditor, paraShadow <<<- ParaShadow ShadowIn $ emptyParams),
-                        paraName <<<- ParaName "Complex"
-                        $    paraDirection <<<- ParaDirection Vertical
-                        $ paraOuterAlignment <<<- ParaOuterAlignment  (0.0, 0.0, 0.0, 0.0)
-                        $ paraOuterPadding <<<- ParaOuterPadding    (0, 0, 0, 0)
-                        $ paraInnerAlignment <<<- ParaInnerAlignment  (0.0, 0.0, 0.0, 0.0)
-                        $ paraInnerPadding <<<- ParaInnerPadding   (0, 0, 0, 0)
-                        $ emptyParams) "Select version range"), emptyParams)
+            (eitherOrEditor
+               (pairEditor (comboSelectionEditor v1 (T.pack . show), emptyParams)
+                  (versionEditor,
+                   paraName <<<- ParaName "Enter Version" $ emptyParams),
+                paraDirection <<<- ParaDirection Vertical $
+                   paraName <<<- ParaName "Simple" $
+                     paraOuterAlignment <<<- ParaOuterAlignment (0.0, 0.0, 0.0, 0.0) $
+                       paraOuterPadding <<<- ParaOuterPadding (0, 0, 0, 0) $
+                         paraInnerAlignment <<<- ParaInnerAlignment (0.0, 0.0, 0.0, 0.0) $
+                           paraInnerPadding <<<- ParaInnerPadding (0, 0, 0, 0) $ emptyParams)
+               (tupel3Editor
+                  (comboSelectionEditor v2 (T.pack . show), emptyParams)
+                  (versionRangeEditor,
+                   paraShadow <<<- ParaShadow ShadowIn $ emptyParams)
+                  (versionRangeEditor,
+                   paraShadow <<<- ParaShadow ShadowIn $ emptyParams),
+                paraName <<<- ParaName "Complex" $
+                  paraDirection <<<- ParaDirection Vertical $
+                    paraOuterAlignment <<<- ParaOuterAlignment (0.0, 0.0, 0.0, 0.0) $
+                      paraOuterPadding <<<- ParaOuterPadding (0, 0, 0, 0) $
+                        paraInnerAlignment <<<- ParaInnerAlignment (0.0, 0.0, 0.0, 0.0) $
+                          paraInnerPadding <<<- ParaInnerPadding (0, 0, 0, 0) $ emptyParams)
+               "Select version range",
+             emptyParams)
             False "Any Version"
             (paraDirection <<<- ParaDirection Vertical $ para)
             noti
     let vrinj AnyVersion                =   inj Nothing
-#if MIN_VERSION_Cabal(1,8,0)
         vrinj (WildcardVersion v)       =   inj (Just (Left (WildcardVersionS,v)))
-#endif
         vrinj (ThisVersion v)           =   inj (Just (Left (ThisVersionS,v)))
         vrinj (LaterVersion v)          =   inj (Just (Left (LaterVersionS,v)))
         vrinj (EarlierVersion v)        =   inj (Just (Left (EarlierVersionS,v)))
@@ -800,9 +795,7 @@ versionRangeEditor para noti = do
                         Nothing -> return (Just AnyVersion)
                         Just Nothing -> return (Just AnyVersion)
                         Just (Just (Left (ThisVersionS,v)))     -> return (Just (ThisVersion v))
-#if MIN_VERSION_Cabal(1,8,0)
                         Just (Just (Left (WildcardVersionS,v)))     -> return (Just (WildcardVersion v))
-#endif
                         Just (Just (Left (LaterVersionS,v)))    -> return (Just (LaterVersion v))
                         Just (Just (Left (EarlierVersionS,v)))   -> return (Just (EarlierVersion v))
 
@@ -814,11 +807,7 @@ versionRangeEditor para noti = do
                                                         -> return (Just (IntersectVersionRanges v1 v2))
     return (wid,vrinj,vrext)
         where
-#if MIN_VERSION_Cabal(1,8,0)
             v1 = [ThisVersionS,WildcardVersionS,LaterVersionS,ThisOrLaterVersionS,EarlierVersionS,ThisOrEarlierVersionS]
-#else
-            v1 = [ThisVersionS,LaterVersionS,ThisOrLaterVersionS,EarlierVersionS,ThisOrEarlierVersionS]
-#endif
             v2 = [UnionVersionRangesS,IntersectVersionRangesS]
 
 data Version1 = ThisVersionS | WildcardVersionS | LaterVersionS | ThisOrLaterVersionS | EarlierVersionS | ThisOrEarlierVersionS

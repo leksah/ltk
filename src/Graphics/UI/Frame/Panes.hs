@@ -69,7 +69,7 @@ data PanePathElement = SplitP PaneDirection | GroupP Text
 --
 data PaneDirection  =   TopP | BottomP | LeftP | RightP
     deriving (Eq,Show,Read)
-  	
+
 --
 -- | Description of a window layout
 -- Horizontal: top bottom Vertical: left right

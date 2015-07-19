@@ -19,10 +19,6 @@ source-repository head
   type:     git
   location: https://github.com/leksah/ltk
 
-Flag gtk3
-    description: Use Gtk3
-    default: True
-
 Library
     build-depends: Cabal >=1.6.0 && <1.23, base >=4.0.0.0 && <4.9,
                containers >=0.2 && <0.6, filepath >=1.1.0 && <1.5,
@@ -31,11 +27,8 @@ Library
                pretty >=1.0.1.0 && <1.2, transformers >=0.2.2.0 && <0.5,
                ghc -any
 
-    if flag(gtk3)
-      build-depends: gtk3 >=0.13.2 && <0.14
-      cpp-options:   -DMIN_VERSION_gtk=MIN_VERSION_gtk3
-    else
-      build-depends: gtk >=0.13.2 && <0.14
+    build-depends: gtk3 >=0.13.2 && <0.14
+    cpp-options:   -DMIN_VERSION_gtk=MIN_VERSION_gtk3
 
     exposed-modules: Default MyMissing Control.Event
                  Graphics.UI.Editor.Basics Graphics.UI.Editor.Composite

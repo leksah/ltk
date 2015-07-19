@@ -201,13 +201,13 @@ prettyPrint a = T.pack $ PP.renderStyle  PP.style (pretty a)
 
 -- | Things that can be pretty-printed
 class Pretty a where
-	-- | Pretty-print something in isolation.
-	pretty :: a -> PP.Doc
-	-- | Pretty-print something in a precedence context.
-	prettyPrec :: Int -> a -> PP.Doc
-	pretty = prettyPrec 0
-	prettyPrec _ = pretty
-	
+    -- | Pretty-print something in isolation.
+    pretty :: a -> PP.Doc
+    -- | Pretty-print something in a precedence context.
+    prettyPrec :: Int -> a -> PP.Doc
+    pretty = prettyPrec 0
+    prettyPrec _ = pretty
+
 emptyPrinter ::  () ->  PP.Doc
 emptyPrinter _ = PP.empty
 
