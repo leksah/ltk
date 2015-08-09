@@ -25,10 +25,7 @@ Library
                glib >=0.13.0.0 && <0.14, text >=0.11.0.6 && <1.3,
                mtl >=1.1.0.2 && <2.3, parsec >=2.1.0.1 && <3.2,
                pretty >=1.0.1.0 && <1.2, transformers >=0.2.2.0 && <0.5,
-               ghc -any
-
-    build-depends: gtk3 >=0.13.2 && <0.14
-    cpp-options:   -DMIN_VERSION_gtk=MIN_VERSION_gtk3
+               ghc -any, gtk3 >=0.13.2 && <0.15
 
     exposed-modules: Default MyMissing Control.Event
                  Graphics.UI.Editor.Basics Graphics.UI.Editor.Composite
