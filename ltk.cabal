@@ -1,5 +1,5 @@
 name: ltk
-version: 0.15.0.2
+version: 0.15.0.3
 cabal-version: >= 1.8
 build-type: Simple
 license: GPL
