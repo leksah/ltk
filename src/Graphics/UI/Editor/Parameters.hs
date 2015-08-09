@@ -79,14 +79,6 @@ data Parameter      =   ParaName Text
     deriving (Eq,Show)
 
 
-{--        #if MIN_VERSION_gtk(0,9,13)
-            -- now defined in gtk
-        #else
-        instance Show ShadowType
-            where show _    =   "Any Shadow"
-        #endif
---}
-
 emptyParams         ::   [Parameter]
 emptyParams         =   []
 
