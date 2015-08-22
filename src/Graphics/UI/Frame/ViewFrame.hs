@@ -38,6 +38,7 @@ module Graphics.UI.Frame.ViewFrame (
 
 -- * View Actions
 ,   viewMove
+,   viewMoveTo
 ,   viewSplitHorizontal
 ,   viewSplitVertical
 --,   viewSplit
@@ -161,7 +162,8 @@ import Control.Applicative ((<$>))
 import qualified Control.Monad.Reader as Gtk (liftIO)
 import qualified Data.Text as T (pack, stripPrefix, unpack)
 import Data.Monoid ((<>))
-import Graphics.UI.Gtk.Abstract.Widget (buttonReleaseEvent)
+import Graphics.UI.Gtk.Abstract.Widget
+       (widgetSetSizeRequest, buttonReleaseEvent)
 import Data.Foldable (forM_)
 import Control.Arrow (Arrow(..))
 
@@ -476,18 +478,19 @@ viewSplit' panePath dir = do
                                 rName::Text <- widgetGetName activeNotebook
                                 widgetSetName newpane rName
                                 widgetSetName nb (altname :: Text)
-                                panedPack2 newpane nb True True
+                                panedPack2 newpane nb True False
                                 nbIndex <- if parent `isA` gTypeNotebook
                                             then notebookPageNum (castToNotebook' "viewSplit'1" parent) activeNotebook
                                             else trace "ViewFrame>>viewSplit': parent not a notebook: " return Nothing
                                 containerRemove (castToContainer parent) activeNotebook
                                 widgetSetName activeNotebook (name :: Text)
-                                panedPack1 newpane activeNotebook True True
+                                panedPack1 newpane activeNotebook True False
                                 return (newpane,nbIndex)
                             case (reverse panePath, nbi) of
-                                (SplitP dir:_, _)
-                                    | dir `elem` [TopP, LeftP] -> liftIO $ panedPack1 (castToPaned parent) np True True
-                                    | otherwise                -> liftIO $ panedPack2 (castToPaned parent) np True True
+                                (SplitP dir:_, _) -> liftIO $ do
+                                    if dir `elem` [TopP, LeftP]
+                                        then panedPack1 (castToPaned parent) np True False
+                                        else panedPack2 (castToPaned parent) np True False
                                 (GroupP group:_, Just n) -> do
                                     liftIO $ notebookInsertPage (castToNotebook' "viewSplit' 2" parent) np group n
                                     label <- groupLabel group
@@ -520,7 +523,7 @@ viewSplit' panePath dir = do
                     name <- liftIO $ widgetGetName (fromJust mbWidget)
                     mbPane  <- mbPaneFromName name
                     case mbPane of
-                        Just (PaneC pane) -> move (panePath ++ [SplitP (otherDirection paneDir)]) pane
+                        Just (PaneC pane) -> viewMoveTo (panePath ++ [SplitP (otherDirection paneDir)]) pane
                         Nothing -> return ()
               Nothing -> return ()
 
@@ -566,7 +569,7 @@ viewCollapse' panePath = trace "viewCollapse' called" $ do
                                                     $filter (\(w,(p,_)) -> otherSidePath == p)
                                                         $Map.toList paneMap
                             panesToMove       <- mapM paneFromName paneNamesToMove
-                            mapM_ (\(PaneC p) -> move panePath p) panesToMove
+                            mapM_ (\(PaneC p) -> viewMoveTo panePath p) panesToMove
                             let groupNames    =  map (\n -> groupPrefix <> n) $
                                                         getGroupsFrom otherSidePath layout1
                             mapM_ (\n -> move' (n,activeNotebook)) groupNames
@@ -593,9 +596,9 @@ viewCollapse' panePath = trace "viewCollapse' called" $ do
                                                     let lasPathElem = last newPanePath
                                                     case (lasPathElem, nbIndex) of
                                                         (SplitP dir, _) | dir == TopP || dir == LeftP ->
-                                                            liftIO $ panedPack1 (castToPaned grandparent) activeNotebook True True
+                                                            liftIO $ panedPack1 (castToPaned grandparent) activeNotebook True False
                                                         (SplitP dir, _) | dir == BottomP || dir == RightP ->
-                                                            liftIO $ panedPack2 (castToPaned grandparent) activeNotebook True True
+                                                            liftIO $ panedPack2 (castToPaned grandparent) activeNotebook True False
                                                         (GroupP group, Just n) -> do
                                                             liftIO $ notebookInsertPage (castToNotebook' "viewCollapse'' 2" grandparent) activeNotebook group n
                                                             label <- groupLabel group
@@ -888,7 +891,7 @@ viewMove direction = do
                   layout <- getLayoutSt
                   case findMoveTarget panePath layout direction of
                       Nothing -> return ()
-                      Just moveTo -> move moveTo pane
+                      Just moveTo -> viewMoveTo moveTo pane
 
 --
 -- | Find the target for a move
@@ -912,8 +915,8 @@ findMoveTarget panePath layout direction=
 --
 -- | Moves the given Pane to the given path
 --
-move ::  RecoverablePane alpha beta delta => PanePath -> alpha -> delta ()
-move toPanePath pane = do
+viewMoveTo ::  RecoverablePane alpha beta delta => PanePath -> alpha -> delta ()
+viewMoveTo toPanePath pane = do
     let name    = paneName pane
     toNB        <- getNotebook' "move" toPanePath
     move' (name,toNB)
@@ -1048,6 +1051,7 @@ getBestPathForId  id = do
 newNotebook' :: IO Notebook
 newNotebook' = do
     nb <- notebookNew
+    widgetSetSizeRequest nb 50 50
     notebookSetTabPos nb PosTop
     notebookSetShowTabs nb True
     notebookSetScrollable nb True
