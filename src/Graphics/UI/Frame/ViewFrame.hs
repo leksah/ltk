@@ -163,7 +163,7 @@ import qualified Control.Monad.Reader as Gtk (liftIO)
 import qualified Data.Text as T (pack, stripPrefix, unpack)
 import Data.Monoid ((<>))
 import Graphics.UI.Gtk.Abstract.Widget
-       (widgetSetSizeRequest, buttonReleaseEvent)
+       (widgetSetHAlign, widgetSetSizeRequest, buttonReleaseEvent)
 import Data.Foldable (forM_)
 import Control.Arrow (Arrow(..))
 
@@ -293,10 +293,11 @@ mkLabelBox lbl paneName = do
         containerSetBorderWidth tabButton 0
         containerAdd tabButton image
 
-        boxPackStart innerBox lbl       PackGrow 0
-        boxPackStart innerBox tabButton PackNatural 5
+        boxPackStart innerBox lbl       PackNatural 0
+        boxPackStart innerBox tabButton PackNatural 0
 
         containerAdd labelBox innerBox
+        widgetSetHAlign innerBox AlignCenter
         dragSourceSet labelBox [Button1] [ActionCopy,ActionMove]
         tl        <- targetListNew
         targetListAddTextTargets tl 0
@@ -487,7 +488,7 @@ viewSplit' panePath dir = do
                                 panedPack1 newpane activeNotebook True False
                                 return (newpane,nbIndex)
                             case (reverse panePath, nbi) of
-                                (SplitP dir:_, _) -> liftIO $ do
+                                (SplitP dir:_, _) -> liftIO $
                                     if dir `elem` [TopP, LeftP]
                                         then panedPack1 (castToPaned parent) np True False
                                         else panedPack2 (castToPaned parent) np True False
