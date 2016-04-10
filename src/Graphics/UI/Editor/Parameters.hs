@@ -35,15 +35,56 @@ module Graphics.UI.Editor.Parameters (
 ,   getParameterPrim
 ,   (<<<-)
 ,   emptyParams
+,   Packing(..)
+,   boxPackStart'
+,   boxPackEnd'
+,   dialogAddButton'
+,   dialogSetDefaultResponse'
+,   dialogResponse'
+,   dialogRun'
 ,   Direction(..)
 ,   HorizontalAlign(..)
 ) where
 
-import Graphics.UI.Gtk
 import Data.Maybe
 import Data.Text (Text)
 import qualified Data.List as List
+import GI.Gtk.Enums (ResponseType, ShadowType(..))
+import GI.Gtk.Objects.Box (boxPackStart, BoxK, boxPackEnd)
+import Control.Monad.IO.Class (MonadIO)
+import GI.Gtk.Objects.Widget (Widget(..), WidgetK)
+import Data.Word (Word32)
+import Data.Int (Int32)
+import qualified Data.Text as T (Text)
+import GI.Gtk.Objects.Dialog
+       (dialogResponse, dialogSetDefaultResponse, DialogK, dialogRun,
+        dialogAddButton)
+import GI.Gtk.Structs.TreePath
+       (treePathNew, TreePath(..))
 
+data Packing = PackRepel | PackGrow | PackNatural deriving (Eq, Show)
+
+boxPackStart' :: (MonadIO m, BoxK a, WidgetK b) => a -> b -> Packing -> Word32 -> m ()
+boxPackStart' a b PackRepel   = boxPackStart a b True  False
+boxPackStart' a b PackGrow    = boxPackStart a b True  True
+boxPackStart' a b PackNatural = boxPackStart a b False False
+
+boxPackEnd' :: (MonadIO m, BoxK a, WidgetK b) => a -> b -> Packing -> Word32 -> m ()
+boxPackEnd' a b PackRepel   = boxPackEnd a b True  False
+boxPackEnd' a b PackGrow    = boxPackEnd a b True  True
+boxPackEnd' a b PackNatural = boxPackEnd a b False False
+
+dialogAddButton' :: (MonadIO m, DialogK d) => d -> T.Text -> ResponseType -> m Widget
+dialogAddButton' d t r = dialogAddButton d t (fromIntegral $ fromEnum r)
+
+dialogSetDefaultResponse' :: (MonadIO m, DialogK d) => d -> ResponseType -> m ()
+dialogSetDefaultResponse' d r = dialogSetDefaultResponse d (fromIntegral $ fromEnum r)
+
+dialogResponse' :: (MonadIO m, DialogK d) => d -> ResponseType -> m ()
+dialogResponse' d r = dialogResponse d (fromIntegral $ fromEnum r)
+
+dialogRun' :: (MonadIO m, DialogK d) => d -> m ResponseType
+dialogRun' d = toEnum . fromIntegral <$> dialogRun d
 
 --
 -- | The direction of a split
@@ -65,13 +106,13 @@ data Parameter      =   ParaName Text
                     |   ParaShowLabel Bool
                     |   ParaOuterAlignment  (Float,Float,Float,Float)
                                                -- | xalign yalign xscale yscale
-                    |   ParaOuterPadding    (Int,Int,Int,Int)
+                    |   ParaOuterPadding    (Word32,Word32,Word32,Word32)
                                                 --  | paddingTop paddingBottom paddingLeft paddingRight
                     |   ParaInnerAlignment  (Float,Float,Float,Float)
                                                 -- | xalign yalign xscale yscale
-                    |   ParaInnerPadding   (Int,Int,Int,Int)
+                    |   ParaInnerPadding   (Word32,Word32,Word32,Word32)
                                                 --  | paddingTop paddingBottom paddingLeft paddingRight
-                    |   ParaMinSize         (Int, Int)
+                    |   ParaMinSize         (Int32, Int32)
                     |   ParaHorizontal      HorizontalAlign
                     |   ParaStockId Text
                     |   ParaMultiSel Bool
@@ -110,15 +151,15 @@ paraInnerAlignment              ::   Parameter -> Maybe (Float,Float,Float,Float
 paraInnerAlignment (ParaInnerAlignment d) = Just d
 paraInnerAlignment _            =   Nothing
 
-paraOuterPadding                ::   Parameter -> Maybe (Int,Int,Int,Int)
+paraOuterPadding                ::   Parameter -> Maybe (Word32,Word32,Word32,Word32)
 paraOuterPadding (ParaOuterPadding d) = Just d
 paraOuterPadding _              =   Nothing
 
-paraInnerPadding                ::   Parameter -> Maybe (Int,Int,Int,Int)
+paraInnerPadding                ::   Parameter -> Maybe (Word32,Word32,Word32,Word32)
 paraInnerPadding (ParaInnerPadding d) = Just d
 paraInnerPadding _              =   Nothing
 
-paraMinSize                     ::   Parameter -> Maybe (Int, Int)
+paraMinSize                     ::   Parameter -> Maybe (Int32, Int32)
 paraMinSize (ParaMinSize d)     =   Just d
 paraMinSize _                   =   Nothing
 
@@ -164,7 +205,7 @@ defaultParameters =
     ,   ParaStockId ""
     ,   ParaSynopsis ""
     ,   ParaDirection Horizontal
-    ,   ParaShadow ShadowNone
+    ,   ParaShadow ShadowTypeNone
     ,   ParaOuterAlignment  (0.4, 0.5, 1.0, 0.7)
     ,   ParaOuterPadding    (5, 5, 5, 5)
     ,   ParaInnerAlignment  (0.4, 0.5, 1.0, 0.7)

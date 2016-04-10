@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase #-}
 -----------------------------------------------------------------------------
 --group_Test
 -- Module      :  Graphics.UI.Editor.MakeEditor
@@ -29,7 +30,6 @@ module Graphics.UI.Editor.MakeEditor (
 
 ) where
 
-import Graphics.UI.Gtk
 import Control.Monad
 import Data.List (unzip4, intersperse)
 import Data.Text (Text)
@@ -41,7 +41,50 @@ import Graphics.UI.Editor.Basics
 --import Graphics.UI.Frame.ViewFrame
 import Data.Maybe (fromMaybe, isNothing)
 import Data.IORef (newIORef)
-import qualified Graphics.UI.Gtk.Gdk.Events as GTK (Event(..))
+import GI.Gtk.Objects.Widget
+       (toWidget, widgetSetName, widgetSetSizeRequest, Widget(..))
+import GI.Gtk.Objects.Notebook
+       (setNotebookEnablePopup, notebookSetCurrentPage,
+        notebookAppendPage, notebookSetScrollable, notebookSetShowTabs,
+        notebookSetTabPos, notebookNew, Notebook(..))
+import GI.Gtk.Objects.ScrolledWindow
+       (scrolledWindowSetPolicy, scrolledWindowAddWithViewport,
+        scrolledWindowNew)
+import GI.Gtk.Objects.TreeView
+       (treeViewSetHeadersVisible, treeViewAppendColumn,
+        treeViewGetSelection, treeViewNewWithModel)
+import GI.Gtk.Objects.TreeSelection
+       (onTreeSelectionChanged,
+        treeSelectionSelectPath, treeSelectionSetMode)
+import GI.Gtk.Objects.CellRendererText
+       (setCellRendererTextText, cellRendererTextNew)
+import GI.Gtk.Objects.TreeViewColumn (treeViewColumnNew)
+import GI.Gtk.Interfaces.CellLayout
+       (cellLayoutSetCellDataFunc, cellLayoutPackStart)
+import Data.GI.Base.Attributes (AttrOp(..))
+import Data.GI.Base.Signals (on)
+import GI.Gtk.Objects.HBox (hBoxNew)
+import GI.Gtk.Objects.Container
+       (toContainer, Container(..), containerAdd)
+import GI.Gtk.Objects.Box (Box(..), boxPackEnd, boxPackStart)
+import GI.Gtk.Objects.VBox (vBoxNew)
+import GI.Gtk.Objects.Alignment (alignmentSetPadding, alignmentNew)
+import GI.Gtk.Objects.Frame
+       (frameSetLabel, frameSetShadowType, frameNew)
+import GI.Gtk.Objects.Bin (Bin(..), binGetChild)
+import GI.Gtk.Enums
+       (SelectionMode(..), PolicyType(..), PositionType(..))
+import Data.GI.Base.ManagedPtr (castTo, unsafeCastTo)
+import Data.GI.Gtk.ModelView.CustomStore (customStoreGetRow)
+import GI.Gtk.Objects.Adjustment (noAdjustment)
+import Data.GI.Gtk.ModelView.SeqStore (SeqStore(..), seqStoreNew)
+import GI.Gtk.Objects.Label (labelNew)
+import Control.Exception (catch)
+import Data.GI.Base.BasicTypes (UnexpectedNullPointerReturn(..))
+import GI.Gtk.Structs.TreePath (treePathNewFirst)
+import Data.GI.Gtk.ModelView.Types
+       (treeSelectionGetSelectedRows', treePathGetIndices')
+import Control.Monad.IO.Class (MonadIO(..), MonadIO)
 
 --
 -- | A constructor type for a field desciption
@@ -71,17 +114,17 @@ parameters (NFD _) = emptyParams
 --
 -- | Construct a new notebook
 --
-newNotebook :: IO Notebook
+newNotebook :: MonadIO m => m Notebook
 newNotebook = do
     nb <- notebookNew
-    notebookSetTabPos nb PosTop
+    notebookSetTabPos nb PositionTypeTop
     notebookSetShowTabs nb True
     notebookSetScrollable nb True
-    notebookSetPopup nb True
+    setNotebookEnablePopup nb True
     return nb
 
-buildEditor :: FieldDescription alpha -> alpha -> IO (Widget, Injector alpha , alpha -> Extractor alpha , Notifier)
-buildEditor (FD paras editorf) v  =   editorf v
+buildEditor :: MonadIO m => FieldDescription alpha -> alpha -> m (Widget, Injector alpha , alpha -> Extractor alpha , Notifier)
+buildEditor (FD paras editorf) v  =  liftIO $ editorf v
 buildEditor (HFD paras descrs) v =   buildBoxEditor descrs Horizontal v
 buildEditor (VFD paras descrs) v =   buildBoxEditor descrs Vertical v
 buildEditor (NFD pairList)     v =   do
@@ -91,62 +134,61 @@ buildEditor (NFD pairList)     v =   do
     let (widgets, setInjs, getExts, notifiers) = unzip4 resList
     notifier <- emptyNotifier
     mapM_ (\ (labelString, widget) -> do
-        sw <- scrolledWindowNew Nothing Nothing
+        sw <- scrolledWindowNew noAdjustment noAdjustment
         scrolledWindowAddWithViewport sw widget
-        scrolledWindowSetPolicy sw PolicyAutomatic PolicyAutomatic
-        notebookAppendPage nb sw labelString)
+        scrolledWindowSetPolicy sw PolicyTypeAutomatic PolicyTypeAutomatic
+        notebookAppendPage nb sw . Just =<< labelNew (Just labelString))
          (zip (map fst pairList) widgets)
-    listStore   <- listStoreNew (map fst pairList)
-    listView    <- treeViewNewWithModel listStore
+    seqStore   <- seqStoreNew (map fst pairList)
+    listView    <- treeViewNewWithModel seqStore
     widgetSetSizeRequest listView 100 (-1)
     sel         <- treeViewGetSelection listView
-    treeSelectionSetMode sel SelectionSingle
+    treeSelectionSetMode sel SelectionModeSingle
     renderer    <- cellRendererTextNew
     col         <- treeViewColumnNew
     treeViewAppendColumn listView col
     cellLayoutPackStart col renderer True
-    cellLayoutSetAttributes col renderer listStore $ \row ->
-        [ cellText := row ]
+    cellLayoutSetCellDataFunc col renderer . Just $ \c r m i -> do
+        row <- customStoreGetRow seqStore i
+        setCellRendererTextText renderer row
     treeViewSetHeadersVisible listView False
-    treeSelectionSelectPath sel [0]
+    treeSelectionSelectPath sel =<< treePathNewFirst
     notebookSetCurrentPage nb 0
-    on sel treeSelectionSelectionChanged (do
-        selections <- treeSelectionGetSelectedRows sel
+    onTreeSelectionChanged sel $ do
+        selections <- treeSelectionGetSelectedRows' sel >>= mapM treePathGetIndices'
         case selections of
             [[i]] -> notebookSetCurrentPage nb i
-            _ -> return ())
+            _ -> return ()
 
-    hb      <-  hBoxNew False 0
-    sw              <-  scrolledWindowNew Nothing Nothing
+    hb          <- hBoxNew False 0
+    sw          <- scrolledWindowNew noAdjustment noAdjustment
     containerAdd sw listView
-    scrolledWindowSetPolicy sw PolicyNever PolicyAutomatic
-    boxPackStart hb sw PackNatural 0
-    boxPackEnd hb nb PackGrow 7
+    scrolledWindowSetPolicy sw PolicyTypeNever PolicyTypeAutomatic
+    boxPackStart' hb sw PackNatural 0
+    boxPackEnd' hb nb PackGrow 7
     let newInj v = mapM_ (\ setInj -> setInj v) setInjs
     let newExt v = extract v getExts
     mapM_ (propagateEvent notifier notifiers) allGUIEvents
-    return (castToWidget hb, newInj, newExt, notifier)
+    widget <- liftIO $ toWidget hb
+    return (widget, newInj, newExt, notifier)
 
-buildBoxEditor :: [FieldDescription alpha] -> Direction -> alpha
-    -> IO (Widget, Injector alpha , alpha -> Extractor alpha , Notifier)
+buildBoxEditor :: MonadIO m => [FieldDescription alpha] -> Direction -> alpha
+    -> m (Widget, Injector alpha , alpha -> Extractor alpha , Notifier)
 buildBoxEditor descrs dir v = do
     resList <- mapM (`buildEditor` v) descrs
     notifier <- emptyNotifier
     let (widgets, setInjs, getExts, notifiers) = unzip4 resList
     hb <- case dir of
-            Horizontal -> do
-                b <- hBoxNew False 0
-                return (castToBox b)
-            Vertical -> do
-                b <- vBoxNew False 0
-                return (castToBox b)
+            Horizontal -> hBoxNew False 0 >>= liftIO . unsafeCastTo Box
+            Vertical   -> vBoxNew False 0 >>= liftIO . unsafeCastTo Box
     let newInj v = mapM_ (\ setInj -> setInj v) setInjs
     let fieldNames = map (fromMaybe "Unnamed" . getParameterPrim paraName . parameters) descrs
     let packParas = map (getParameter paraPack . parameters) descrs
     mapM_ (propagateEvent notifier notifiers) allGUIEvents
     let newExt v = extractAndValidate v getExts fieldNames notifier
-    mapM_ (\ (w,p) -> boxPackStart hb w p 0) $ zip widgets packParas
-    return (castToWidget hb, newInj, newExt, notifier)
+    mapM_ (\ (w,p) -> boxPackStart' hb w p 0) $ zip widgets packParas
+    hbWidget <- liftIO $ toWidget hb
+    return (hbWidget, newInj, newExt, notifier)
 
 
 flattenFieldDescription :: FieldDescription alpha -> [FieldDescription alpha]
@@ -187,12 +229,12 @@ mkEditor injectorC extractor parameters notifier = do
     outerAlig <- alignmentNew xalign yalign xscale yscale
     let (paddingTop, paddingBottom, paddingLeft, paddingRight) = getParameter paraOuterPadding parameters
     alignmentSetPadding outerAlig paddingTop paddingBottom paddingLeft paddingRight
-    frame   <-  frameNew
+    frame   <-  frameNew Nothing
     frameSetShadowType frame (getParameter paraShadow parameters)
     case getParameter paraName parameters of
         "" -> return ()
         str -> when (getParameter paraShowLabel parameters) $
-                  frameSetLabel frame str
+                  frameSetLabel frame (Just str)
 
     containerAdd outerAlig frame
     let (xalign, yalign, xscale, yscale) =  getParameter paraInnerAlignment parameters
@@ -204,15 +246,16 @@ mkEditor injectorC extractor parameters notifier = do
     widgetSetSizeRequest outerAlig x y
     let name  =  getParameter paraName parameters
     widgetSetName outerAlig name
-    let build = injectorC (castToContainer innerAlig)
-    return (castToWidget outerAlig, build, extractor)
+    build <- injectorC <$> toContainer innerAlig
+    w <- toWidget outerAlig
+    return (w, build, extractor)
 
 -- | Convenience method to validate and extract fields
 --
-extractAndValidate :: alpha -> [alpha -> Extractor alpha] -> [Text] -> Notifier -> IO (Maybe alpha)
+extractAndValidate :: MonadIO m => alpha -> [alpha -> Extractor alpha] -> [Text] -> Notifier -> m (Maybe alpha)
 extractAndValidate val getExts fieldNames notifier = do
     (newVal,errors) <- foldM (\ (val,errs) (ext,fn) -> do
-        extVal <- ext val
+        extVal <- liftIO $ ext val
         case extVal of
             Just nval -> return (nval,errs)
             Nothing -> return (val, (" " <> fn) : errs))
@@ -220,31 +263,33 @@ extractAndValidate val getExts fieldNames notifier = do
     if null errors
         then return (Just newVal)
         else do
-            triggerEvent notifier GUIEvent {
+            liftIO $ triggerEvent notifier GUIEvent {
                     selector = ValidationError,
                     eventText = mconcat (intersperse ", " errors),
                     gtkReturn = True}
             return Nothing
 
-extract :: alpha -> [alpha -> Extractor alpha] -> IO (Maybe alpha)
+extract :: MonadIO m => alpha -> [alpha -> Extractor alpha] -> m (Maybe alpha)
 extract val  =
     foldM (\ mbVal ext ->
         case mbVal of
             Nothing -> return Nothing
-            Just val -> ext val)
+            Just val -> liftIO $ ext val)
             (Just val)
 
 -- | get through outerAlignment, frame, innerAlignment
-getRealWidget :: Widget -> IO (Maybe Widget)
-getRealWidget w = do
-    mbF <- binGetChild (castToBin w)
-    case mbF of
+getRealWidget :: MonadIO m => Widget -> m (Maybe Widget)
+getRealWidget w = liftIO $ (
+    castTo Bin w >>= \case
         Nothing -> return Nothing
-        Just f -> do
-            mbIA <- binGetChild (castToBin f)
-            case mbIA of
+        Just b  ->
+            binGetChild b >>= castTo Bin >>= \case
                 Nothing -> return Nothing
-                Just iA -> binGetChild (castToBin iA)
+                Just f  ->
+                    binGetChild f >>= castTo Bin >>= \case
+                        Nothing -> return Nothing
+                        Just ia -> Just <$> binGetChild ia
+  ) `catch` (\UnexpectedNullPointerReturn {} -> return Nothing)
 
 
 

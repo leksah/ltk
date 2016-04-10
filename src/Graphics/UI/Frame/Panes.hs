@@ -35,19 +35,24 @@ module Graphics.UI.Frame.Panes (
 ,   signalDisconnectAll
 ) where
 
-import Graphics.UI.Gtk hiding (get)
-import System.Glib.GObject
-import System.Glib.Signals
 import Data.Maybe
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Typeable
 import Graphics.UI.Editor.Basics
        (Connection(..), Connection, Connections)
-import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.IO.Class (MonadIO(..), MonadIO)
 import Data.Text (Text)
 import Data.Monoid ((<>))
 import qualified Data.Text as T (pack)
+import Data.GI.Base.ManagedPtr (unsafeCastTo)
+import GI.Gtk.Objects.Widget (Widget(..))
+import GI.Gtk.Objects.Notebook (Notebook(..))
+import GI.Gtk.Objects.Window (Window(..))
+import GI.Gtk.Objects.UIManager (UIManager(..))
+import GI.GObject.Functions (signalHandlerDisconnect)
+import GI.GObject.Objects.Object (Object(..))
+import Foreign.Ptr (Ptr)
 
 -- ---------------------------------------------------------------------
 -- Panes and pane layout
@@ -90,7 +95,7 @@ data PaneLayout =       HorizontalP PaneLayout PaneLayout Int
 
 class (Typeable alpha, PaneMonad delta) =>  Pane alpha delta | alpha -> delta  where
 
-    getTopWidget    ::   alpha -> Widget
+    getTopWidget    ::   alpha -> delta Widget
     -- ^ gets the top Widget of this pane
     paneId          ::   alpha -> Text
     primPaneName    ::   alpha -> Text
@@ -190,7 +195,7 @@ data FrameState delta = FrameState {
 ,   panes           ::  Map PaneName (IDEPane delta)
 ,   paneMap         ::  Map PaneName (PanePath, Connections)
 ,   activePane      ::  Maybe (PaneName, Connections)
-,   panePathFromNB  ::  ! (Map Notebook PanePath)
+,   panePathFromNB  ::  ! (Map (Ptr Notebook) PanePath)
 ,   layout          ::  PaneLayout}
     deriving Show
 
@@ -206,6 +211,6 @@ instance Show Connection where
 instance Show Notebook where
     show _ = "a Notebook"
 
-signalDisconnectAll :: Connections -> IO ()
-signalDisconnectAll = mapM_ (\ (ConnectC s) -> signalDisconnect s)
+signalDisconnectAll :: MonadIO m => Connections -> m ()
+signalDisconnectAll = mapM_ (\ (ConnectC o s) -> liftIO (unsafeCastTo Object o) >>= flip signalHandlerDisconnect s)
 

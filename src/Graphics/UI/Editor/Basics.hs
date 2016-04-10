@@ -3,6 +3,7 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  Graphics.UI.Editor.Basics
@@ -44,7 +45,6 @@ module Graphics.UI.Editor.Basics (
 import Prelude
 import Text.Show
 
-import Graphics.UI.Gtk
 import Data.Unique
 import Data.IORef
 import Data.Text (Text)
@@ -60,6 +60,16 @@ import Unsafe.Coerce (unsafeCoerce)
 import Control.Arrow (first)
 import MyMissing (allOf)
 import qualified Data.Text as T (pack)
+import GI.Gtk.Objects.Widget
+       (afterWidgetKeyReleaseEvent, afterWidgetButtonReleaseEvent,
+        onWidgetFocusInEvent, onWidgetFocusOutEvent, widgetGetName,
+        Widget(..))
+import Data.GI.Base.BasicTypes (GObject)
+import Data.GI.Base.Signals (SignalHandlerId)
+import Data.GI.Base.ManagedPtr (unsafeCastTo, castTo)
+import GI.Gtk.Objects.Button (onButtonClicked, Button(..))
+import GI.GObject.Objects.Object (ObjectK)
+import Control.Monad.IO.Class (MonadIO)
 
 fromString = Just . T.pack
 
@@ -139,7 +149,7 @@ type GtkHandler = IO Bool
 --
 -- | A type for a function to register a gtk event
 -- |
-type GtkRegFunc = forall o . GObjectClass o => o -> GtkHandler -> IO Connection
+type GtkRegFunc = forall o . GObject o => o -> GtkHandler -> IO Connection
 
 --
 -- | The widgets are the real event sources.
@@ -163,16 +173,16 @@ newtype Notifier =   Noti (IORef (Handlers GUIEvent IO GUIEventSelector,
                                         Map GUIEventSelector GUIEventReg))
 
 
-emptyNotifier :: IO Notifier
+emptyNotifier :: MonadIO m => m Notifier
 emptyNotifier                            =   do
-    h <- newIORef (Map.empty,Map.empty)
+    h <- liftIO $ newIORef (Map.empty,Map.empty)
     let noti      =  Noti h
     return noti
 
 --
 -- | Signal handlers for the different pane types
 --
-data Connection =  forall alpha . GObjectClass alpha => ConnectC (ConnectId alpha)
+data Connection =  forall alpha . GObject alpha => ConnectC alpha SignalHandlerId
 
 type Connections = [Connection]
 
@@ -233,9 +243,9 @@ instance  EventSource Notifier GUIEvent IO GUIEventSelector where
 --
 -- | Propagate the event with the selector from notifier to eventSource
 --
-propagateEvent :: Notifier -> [Notifier] -> GUIEventSelector -> IO ()
+propagateEvent :: MonadIO m => Notifier -> [Notifier] -> GUIEventSelector -> m ()
 propagateEvent (Noti pairRef) eventSources eventSel = do
-    (handlers,ger) <- readIORef pairRef
+    (handlers,ger) <- liftIO $ readIORef pairRef
     let newGer =    case Map.lookup eventSel ger of
                             Nothing -> Map.insert eventSel
                                         ([],(eventSources,Map.empty)) ger
@@ -245,17 +255,18 @@ propagateEvent (Noti pairRef) eventSources eventSel = do
     newGer2 <- case eventSel `Map.lookup` handlers of
         Nothing     ->  return newGer
         Just hl     ->  foldM (repropagate eventSel) newGer hl
-    writeIORef pairRef (handlers,newGer)
-    where
-    repropagate :: GUIEventSelector
+    liftIO $ writeIORef pairRef (handlers,newGer)
+  where
+    repropagate :: MonadIO m
+        =>  GUIEventSelector
         ->  Map GUIEventSelector GUIEventReg
         ->  (Unique, GUIEvent -> IO GUIEvent)
-        ->  IO (Map GUIEventSelector GUIEventReg)
+        ->  m (Map GUIEventSelector GUIEventReg)
     repropagate eventSet ger (unique,hand) =
         case Map.lookup eventSel ger of
             Just (cids,(notifiers,um))
                 -> do
-                    lu <-  mapM (\es -> registerEvent es eventSel hand)
+                    lu <-  mapM (\es -> liftIO $ registerEvent es eventSel hand)
                                     notifiers
                     let jl =  map (first fromJust)
                                     $ filter (isJust.fst)
@@ -270,23 +281,24 @@ propagateEvent (Noti pairRef) eventSources eventSel = do
 --
 
 activateEvent
-  :: GObjectClass o =>
+  :: GObject o =>
      o
      -> Notifier
-     -> Maybe (o -> IO Bool -> IO Connection)
+     -> Maybe (o -> IO Bool -> IO SignalHandlerId)
      -> GUIEventSelector
      -> IO ()
 activateEvent widget (Noti pairRef) mbRegisterFunc eventSel = do
-    let registerFunc    =   fromMaybe (getStandardRegFunction eventSel) mbRegisterFunc
+    let registerFunc = maybe (getStandardRegFunction eventSel)
+                            (\f w h -> ConnectC w <$> f w h) mbRegisterFunc
     cid <- registerFunc widget (do
                 (hi,_) <- readIORef pairRef
                 case Map.lookup eventSel hi of
                     Nothing -> return False
                     Just [] -> return False
                     Just handlers -> do
-                        name <- if widget `isA` gTypeWidget
-                                    then widgetGetName (castToWidget widget)
-                                    else return "no widget - no name" :: IO Text
+                        name <- castTo Widget widget >>= \case
+                                    Just w  -> widgetGetName w
+                                    Nothing -> return "no widget - no name"
                         eventList <- mapM ((\f -> do
                             let ev = GUIEvent eventSel "" False
                             f ev) . snd) handlers
@@ -304,11 +316,11 @@ activateEvent widget (Noti pairRef) mbRegisterFunc eventSel = do
 -- | A convinence method for not repeating this over and over again
 --
 getStandardRegFunction :: GUIEventSelector -> GtkRegFunc
-getStandardRegFunction FocusOut         =   \w h -> liftM ConnectC $ on (castToWidget w) focusOutEvent $ liftIO h
-getStandardRegFunction FocusIn          =   \w h -> liftM ConnectC $ on (castToWidget w) focusInEvent $ liftIO h
-getStandardRegFunction ButtonPressed    =   \w h -> liftM ConnectC $ after (castToWidget w) buttonReleaseEvent $ liftIO h
-getStandardRegFunction KeyPressed       =   \w h -> liftM ConnectC $ after (castToWidget w) keyReleaseEvent $ liftIO h
-getStandardRegFunction Clicked          =   \w h -> liftM ConnectC $ on (castToButton w) buttonActivated $ void $ liftIO h
+getStandardRegFunction FocusOut         =   \w h -> fmap (ConnectC w) $ unsafeCastTo Widget w >>= (`onWidgetFocusOutEvent` const h)
+getStandardRegFunction FocusIn          =   \w h -> fmap (ConnectC w) $ unsafeCastTo Widget w >>= (`onWidgetFocusInEvent` const h)
+getStandardRegFunction ButtonPressed    =   \w h -> fmap (ConnectC w) $ unsafeCastTo Widget w >>= (`afterWidgetButtonReleaseEvent` const h)
+getStandardRegFunction KeyPressed       =   \w h -> fmap (ConnectC w) $ unsafeCastTo Widget w >>= (`afterWidgetKeyReleaseEvent` const h)
+getStandardRegFunction Clicked          =   \w h -> fmap (ConnectC w) $ unsafeCastTo Button w >>= (`onButtonClicked` void h)
 getStandardRegFunction _    =   error "Basic>>getStandardRegFunction: no original GUI event"
 
 registerEvents :: EventSource alpha beta gamma delta => alpha -> [delta] -> (beta -> gamma beta) -> gamma [Maybe Unique]

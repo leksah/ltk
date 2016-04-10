@@ -35,6 +35,9 @@ module Text.PrinterParser (
 ,   showFields
 ,   readFields
 ,   parseFields
+,   Color(..)
+,   toGdkColor
+,   fromGdkColor
 ) where
 
 import Text.ParserCombinators.Parsec.Language
@@ -46,7 +49,6 @@ import Graphics.UI.Editor.Parameters
 import Graphics.UI.Editor.Basics
 import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Monoid ((<>))
-import Graphics.UI.Gtk (Color(..))
 import Data.List (foldl')
 import qualified Text.ParserCombinators.Parsec as  P
     ((<?>), CharParser(..), parseFromFile)
@@ -54,7 +56,16 @@ import Control.Exception as E (catch, IOException)
 import qualified Data.Text as T (pack, unpack)
 import Data.Text (Text)
 import Control.Applicative ((<$>))
-
+import Numeric (showHex)
+import System.IO.Unsafe (unsafePerformIO)
+import Data.Word (Word16)
+import Control.Monad.IO.Class (MonadIO)
+import qualified GI.Gdk.Structs.Color as Gdk (Color(..))
+import Data.GI.Base.Constructible (Constructible(..))
+import GI.Gdk.Structs.Color
+       (colorReadBlue, colorReadGreen, colorReadRed, colorBlue,
+        colorGreen, colorRed)
+import Data.GI.Base.Attributes (AttrOp(..))
 
 type Printer beta       =   beta -> PP.Doc
 type Parser beta        =   CharParser () beta
@@ -156,6 +167,8 @@ intParser = do
     i <-  integer
     return (fromIntegral i)
 
+data Color = Color Word16 Word16 Word16 deriving(Eq, Show)
+
 colorParser :: CharParser () Color
 colorParser = do
     string "Color"
@@ -166,6 +179,17 @@ colorParser = do
     whiteSpace
     b <- integer
     return $ Color (fromIntegral r) (fromIntegral g) (fromIntegral b)
+
+toGdkColor :: MonadIO m => Color -> m Gdk.Color
+toGdkColor (Color r g b) =
+    new Gdk.Color [colorRed := r, colorGreen := g, colorBlue := b]
+
+fromGdkColor :: MonadIO m => Gdk.Color -> m Color
+fromGdkColor c = do
+    r <- colorReadRed c
+    g <- colorReadGreen c
+    b <- colorReadBlue c
+    return $ Color r g b
 
 emptyParser ::  CharParser () ()
 emptyParser = pzero

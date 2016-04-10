@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DataKinds #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  Graphics.UI.Editor.Composite
@@ -32,7 +33,6 @@ module Graphics.UI.Editor.Composite (
 ,   dependenciesEditor
 ) where
 
-import Graphics.UI.Gtk
 import Control.Monad
 import Data.IORef
 import Data.Maybe
@@ -57,9 +57,40 @@ import Distribution.Text (simpleParse, display)
 import Distribution.Package (pkgName)
 import Data.Version (Version(..))
 import MyMissing (forceJust)
-import qualified Graphics.UI.Gtk.Gdk.Events as Gtk (Event(..))
 import Unsafe.Coerce (unsafeCoerce)
 import Debug.Trace (trace)
+import GI.Gtk
+       (noTreeViewColumn, noAdjustment,
+        FileChooserAction, treeModelGetPath,
+        treeSelectionGetSelected, treeViewScrollToCell, treeViewGetColumn,
+        treeSelectionSelectPath, onButtonClicked, onTreeSelectionChanged,
+        treeViewSetHeadersVisible, cellLayoutPackStart,
+        cellRendererTextNew, treeViewAppendColumn,
+        treeViewColumnSetResizable, treeViewColumnSetTitle,
+        treeViewColumnNew, treeSelectionSetMode, treeViewGetSelection,
+        scrolledWindowSetMinContentHeight, scrolledWindowSetPolicy,
+        scrolledWindowNew, widgetSetSizeRequest, treeViewNewWithModel,
+        afterTreeModelRowDeleted, afterTreeModelRowInserted,
+        buttonNewWithLabel, hButtonBoxNew, ButtonBox(..), vButtonBoxNew,
+        CellRendererText, containerRemove, widgetSetSensitive,
+        containerGetChildren, widgetHide, widgetShowAll, boxPackEnd,
+        panedPack2, panedPack1, hPanedNew, Paned(..), vPanedNew,
+        containerAdd, boxPackStart, vBoxNew, Box(..), hBoxNew, Widget(..))
+import Data.GI.Base.ManagedPtr (unsafeCastTo, castTo)
+import Data.GI.Base.Attributes
+       (AttrLabelProxy(..), AttrOpTag(..), AttrOp(..), AttrOp)
+import GI.Gtk.Enums
+       (ShadowType(..), SelectionMode(..), PolicyType(..))
+import Data.GI.Gtk.ModelView.CellLayout
+       (cellLayoutSetAttributes)
+import Data.GI.Gtk.ModelView.SeqStore
+       (seqStoreAppend, seqStoreClear, seqStoreNew, seqStoreGetValue,
+        seqStoreRemove, seqStoreToList, SeqStore(..))
+import Data.GI.Gtk.ModelView.Types
+       (treePathNewFromIndices', equalManagedPtr)
+import GI.Gtk.Structs.TreePath (treePathGetIndices)
+
+_text = AttrLabelProxy :: AttrLabelProxy "text"
 
 --
 -- | An editor which composes two subeditors
@@ -78,14 +109,10 @@ pairEditor (fstEd,fstPara) (sndEd,sndPara) parameters notifier = do
             case core of
                 Nothing  -> do
                     box <- case getParameter paraDirection parameters of
-                        Horizontal -> do
-                            b <- hBoxNew False 1
-                            return (castToBox b)
-                        Vertical -> do
-                            b <- vBoxNew False 1
-                            return (castToBox b)
-                    boxPackStart box fstFrame PackGrow 0
-                    boxPackStart box sndFrame PackGrow 0
+                        Horizontal -> hBoxNew False 1 >>= unsafeCastTo Box
+                        Vertical   -> vBoxNew False 1 >>= unsafeCastTo Box
+                    boxPackStart box fstFrame True True 0
+                    boxPackStart box sndFrame True True 0
                     containerAdd widget box
                     inj1 v1
                     inj2 v2
@@ -124,15 +151,11 @@ tupel3Editor p1 p2 p3 parameters notifier = do
             case core of
                 Nothing  -> do
                     box <- case getParameter paraDirection parameters of
-                        Horizontal -> do
-                            b <- hBoxNew False 1
-                            return (castToBox b)
-                        Vertical -> do
-                            b <- vBoxNew False 1
-                            return (castToBox b)
-                    boxPackStart box frame1 PackGrow 0
-                    boxPackStart box frame2 PackGrow 0
-                    boxPackStart box frame3 PackGrow 0
+                        Horizontal -> hBoxNew False 1 >>= unsafeCastTo Box
+                        Vertical   -> vBoxNew False 1 >>= unsafeCastTo Box
+                    boxPackStart box frame1 True True 0
+                    boxPackStart box frame2 True True 0
+                    boxPackStart box frame3 True True 0
                     containerAdd widget box
                     inj1 v1
                     inj2 v2
@@ -172,10 +195,8 @@ splitEditor (fstEd,fstPara) (sndEd,sndPara) parameters notifier = do
             case core of
                 Nothing  -> do
                     paned <- case getParameter paraDirection parameters of
-                        Horizontal  -> do  h <- vPanedNew
-                                           return (castToPaned h)
-                        Vertical    -> do  v <- hPanedNew
-                                           return (castToPaned v)
+                        Horizontal -> vPanedNew >>= unsafeCastTo Paned
+                        Vertical   -> hPanedNew >>= unsafeCastTo Paned
                     panedPack1 paned fstFrame True True
                     panedPack2 paned sndFrame True True
                     containerAdd widget paned
@@ -213,16 +234,12 @@ maybeEditor (childEdit, childParams) positive boolLabel parameters notifier = do
             case core of
                 Nothing  -> do
                     box <- case getParameter paraDirection parameters of
-                        Horizontal -> do
-                            b <- hBoxNew False 1
-                            return (castToBox b)
-                        Vertical -> do
-                            b <- vBoxNew False 1
-                            return (castToBox b)
+                        Horizontal -> hBoxNew False 1 >>= unsafeCastTo Box
+                        Vertical   -> vBoxNew False 1 >>= unsafeCastTo Box
                     be@(boolFrame,inj1,ext1) <- boolEditor
                         (paraName <<<- ParaName boolLabel $ emptyParams)
                         notifierBool
-                    boxPackStart box boolFrame PackNatural 0
+                    boxPackStart box boolFrame False False 0
                     containerAdd widget box
                     registerEvent notifierBool Clicked (onClickedHandler widget coreRef childRef cNoti)
                     propagateEvent notifier [notifierBool] MayHaveChanged
@@ -230,7 +247,7 @@ maybeEditor (childEdit, childParams) positive boolLabel parameters notifier = do
                         Nothing -> inj1 (not positive)
                         Just val -> do
                             (childWidget,inj2,ext2) <- getChildEditor childRef childEdit childParams cNoti
-                            boxPackEnd box childWidget PackGrow 0
+                            boxPackEnd box childWidget True True 0
                             widgetShowAll childWidget
                             inj1 positive
                             inj2 val
@@ -255,7 +272,7 @@ maybeEditor (childEdit, childParams) positive boolLabel parameters notifier = do
                                 else do
                                     inj1 positive
                                     (childWidget,inj2,_) <- getChildEditor childRef childEdit childParams cNoti
-                                    boxPackEnd box childWidget PackGrow 0
+                                    boxPackEnd box childWidget True True 0
                                     widgetShowAll childWidget
                                     inj2 val)
         (do
@@ -294,8 +311,8 @@ maybeEditor (childEdit, childParams) positive boolLabel parameters notifier = do
                                 hasChild <- hasChildEditor childRef
                                 (childWidget,inj2,ext2) <- getChildEditor childRef childEdit childParams cNoti
                                 children <- containerGetChildren vBox
-                                unless (childWidget `elem` children) $
-                                    boxPackEnd vBox childWidget PackNatural 0
+                                unless (any (equalManagedPtr childWidget) children) $
+                                    boxPackEnd vBox childWidget False False 0
                                 inj2 getDefault
                                 widgetShowAll childWidget
                     Nothing -> return ()
@@ -331,16 +348,12 @@ disableEditor (childEdit, childParams) positive boolLabel parameters notifier = 
             case core of
                 Nothing  -> do
                     box <- case getParameter paraDirection parameters of
-                        Horizontal -> do
-                            b <- hBoxNew False 1
-                            return (castToBox b)
-                        Vertical -> do
-                            b <- vBoxNew False 1
-                            return (castToBox b)
+                        Horizontal -> hBoxNew False 1 >>= unsafeCastTo Box
+                        Vertical   -> vBoxNew False 1 >>= unsafeCastTo Box
                     be@(boolFrame,inj1,ext1) <- boolEditor
                         (paraName <<<- ParaName boolLabel $ emptyParams)
                         notifierBool
-                    boxPackStart box boolFrame PackNatural 0
+                    boxPackStart box boolFrame False False 0
                     containerAdd widget box
                     registerEvent notifierBool Clicked
                         (onClickedHandler widget coreRef childRef cNoti)
@@ -348,14 +361,14 @@ disableEditor (childEdit, childParams) positive boolLabel parameters notifier = 
                     case mbVal of
                         (False,val) -> do
                             (childWidget,inj2,ext2) <- getChildEditor childRef childEdit childParams cNoti
-                            boxPackEnd box childWidget PackGrow 0
+                            boxPackEnd box childWidget True True 0
                             widgetShowAll childWidget
                             inj1 ( not positive)
                             inj2 val
                             widgetSetSensitive childWidget False
                         (True,val) -> do
                             (childWidget,inj2,ext2) <- getChildEditor childRef childEdit childParams cNoti
-                            boxPackEnd box childWidget PackGrow 0
+                            boxPackEnd box childWidget True True 0
                             widgetShowAll childWidget
                             inj1 positive
                             inj2 val
@@ -381,7 +394,7 @@ disableEditor (childEdit, childParams) positive boolLabel parameters notifier = 
                                 else do
                                     inj1 positive
                                     (childWidget,inj2,_) <- getChildEditor childRef childEdit childParams cNoti
-                                    boxPackEnd box childWidget PackGrow 0
+                                    boxPackEnd box childWidget True True 0
                                     widgetSetSensitive childWidget True
                                     inj2 val)
         (do
@@ -430,7 +443,7 @@ disableEditor (childEdit, childParams) positive boolLabel parameters notifier = 
                                         widgetSetSensitive childWidget True
                                     else do
                                         (childWidget,inj2,_) <- getChildEditor childRef childEdit childParams cNoti
-                                        boxPackEnd vBox childWidget PackNatural 0
+                                        boxPackEnd vBox childWidget False False 0
                                         inj2 getDefault
                                         widgetSetSensitive childWidget True
                     Nothing -> return ()
@@ -471,22 +484,18 @@ eitherOrEditor (leftEditor,leftParams) (rightEditor,rightParams)
                 Nothing  -> do
                     registerEvent noti1 Clicked (onClickedHandler widget coreRef)
                     box <- case getParameter paraDirection parameters of
-                        Horizontal -> do
-                            b <- hBoxNew False 1
-                            return (castToBox b)
-                        Vertical -> do
-                            b <- vBoxNew False 1
-                            return (castToBox b)
-                    boxPackStart box boolFrame PackNatural 0
+                        Horizontal -> hBoxNew False 1 >>= unsafeCastTo Box
+                        Vertical   -> vBoxNew False 1 >>= unsafeCastTo Box
+                    boxPackStart box boolFrame False False 0
                     containerAdd widget box
                     case v of
                         Left vl -> do
-                          boxPackStart box leftFrame PackNatural 0
+                          boxPackStart box leftFrame False False 0
                           inj2 vl
                           inj3 getDefault
                           inj1 True
                         Right vr  -> do
-                          boxPackStart box rightFrame PackNatural 0
+                          boxPackStart box rightFrame False False 0
                           inj3 vr
                           inj2 getDefault
                           inj1 False
@@ -495,13 +504,13 @@ eitherOrEditor (leftEditor,leftParams) (rightEditor,rightParams)
                     case v of
                             Left vl -> do
                               containerRemove box rightFrame
-                              boxPackStart box leftFrame PackNatural 0
+                              boxPackStart box leftFrame False False 0
                               inj2 vl
                               inj3 getDefault
                               inj1 True
                             Right vr  -> do
                               containerRemove box leftFrame
-                              boxPackStart box rightFrame PackNatural 0
+                              boxPackStart box rightFrame False False 0
                               inj3 vr
                               inj2 getDefault
                               inj1 False)
@@ -535,11 +544,11 @@ eitherOrEditor (leftEditor,leftParams) (rightEditor,rightParams)
                     Just bool ->
                             if bool then do
                               containerRemove box rightFrame
-                              boxPackStart box leftFrame PackNatural 0
+                              boxPackStart box leftFrame False False 0
                               widgetShowAll box
                             else do
                               containerRemove box leftFrame
-                              boxPackStart box rightFrame PackNatural 0
+                              boxPackStart box rightFrame False False 0
                               widgetShowAll box
                     Nothing -> return ()
                 return event{gtkReturn=True}
@@ -549,7 +558,7 @@ eitherOrEditor (leftEditor,leftParams) (rightEditor,rightParams)
 -- and a nontrivial:
 --  [("Package",\(Dependency str _) -> [cellText := str])
 --  ,("Version",\(Dependency _ vers) -> [cellText := showVersionRange vers])])
-data ColumnDescr row = ColumnDescr Bool [(Text, row -> [AttrOp CellRendererText])]
+data ColumnDescr row = ColumnDescr Bool [(Text, row -> [AttrOp CellRendererText 'AttrSet])]
 
 --
 -- | An editor with a subeditor, of which a list of items can be selected
@@ -570,39 +579,33 @@ multisetEditor (ColumnDescr showHeaders columnsDD) (singleEditor, sParams) mbSor
                 Nothing  -> do
                     (box,buttonBox) <- case getParameter paraDirection parameters of
                         Horizontal -> do
-                            b  <- hBoxNew False 1
-                            bb <- vButtonBoxNew
-                            return (castToBox b,castToButtonBox bb)
+                            b  <- hBoxNew False 1 >>= unsafeCastTo Box
+                            bb <- vButtonBoxNew >>= unsafeCastTo ButtonBox
+                            return (b, bb)
                         Vertical -> do
-                            b  <- vBoxNew False 1
-                            bb <- hButtonBoxNew
-                            return (castToBox b,castToButtonBox bb)
+                            b  <- vBoxNew False 1 >>= unsafeCastTo Box
+                            bb <- hButtonBoxNew >>= unsafeCastTo ButtonBox
+                            return (b, bb)
                     (frameS,injS,extS) <- singleEditor sParams cnoti
                     mapM_ (propagateEvent notifier [cnoti]) allGUIEvents
-                    addButton   <- buttonNewWithLabel ("Add" :: Text)
-                    removeButton <- buttonNewWithLabel ("Remove" :: Text)
+                    addButton   <- buttonNewWithLabel "Add"
+                    removeButton <- buttonNewWithLabel "Remove"
                     containerAdd buttonBox addButton
                     containerAdd buttonBox removeButton
-                    listStore   <-  listStoreNew ([]:: [alpha])
-                    activateEvent listStore notifier
-                        (Just (\ w h -> do
-                            res     <-  after (castToTreeModel w) rowInserted (\ _ _ ->
-                                void h)
-                            return (ConnectC res))) MayHaveChanged
-                    activateEvent listStore notifier
-                        (Just (\ w h -> do
-                            res     <-  after (castToTreeModel w) rowDeleted (\ _ ->
-                                void h)
-                            return (ConnectC res))) MayHaveChanged
-                    treeView        <-  treeViewNewWithModel listStore
+                    seqStore   <-  seqStoreNew ([]:: [alpha])
+                    activateEvent seqStore notifier
+                        (Just (\ w h -> afterTreeModelRowInserted w (\ _ _ -> void h))) MayHaveChanged
+                    activateEvent seqStore notifier
+                        (Just (\ w h -> afterTreeModelRowDeleted w (\ _ -> void h))) MayHaveChanged
+                    treeView    <-  treeViewNewWithModel seqStore
                     let minSize =   getParameter paraMinSize parameters
                     uncurry (widgetSetSizeRequest treeView) minSize
-                    sw          <-  scrolledWindowNew Nothing Nothing
+                    sw          <-  scrolledWindowNew noAdjustment noAdjustment
                     containerAdd sw treeView
-                    scrolledWindowSetPolicy sw PolicyAutomatic PolicyAutomatic
+                    scrolledWindowSetPolicy sw PolicyTypeAutomatic PolicyTypeAutomatic
                     scrolledWindowSetMinContentHeight sw (snd minSize)
                     sel         <-  treeViewGetSelection treeView
-                    treeSelectionSetMode sel SelectionSingle
+                    treeSelectionSetMode sel SelectionModeSingle
                     mapM_ (\(str,func) -> do
                             col <- treeViewColumnNew
                             treeViewColumnSetTitle  col str
@@ -610,103 +613,101 @@ multisetEditor (ColumnDescr showHeaders columnsDD) (singleEditor, sParams) mbSor
                             treeViewAppendColumn treeView col
                             renderer <- cellRendererTextNew
                             cellLayoutPackStart col renderer True
-                            cellLayoutSetAttributes col renderer listStore func
+                            cellLayoutSetAttributes col renderer seqStore func
                         ) columnsDD
                     treeViewSetHeadersVisible treeView showHeaders
-                    on sel treeSelectionSelectionChanged $ selectionHandler sel listStore injS
-                    boxPackStart box sw PackGrow 0
-                    boxPackStart box buttonBox PackNatural 0
-                    boxPackStart box frameS PackNatural 0
-                    activateEvent (castToWidget treeView) notifier Nothing FocusOut
+                    onTreeSelectionChanged sel $ selectionHandler sel seqStore injS
+                    boxPackStart box sw True True 0
+                    boxPackStart box buttonBox False False 0
+                    boxPackStart box frameS False False 0
+                    activateEvent treeView notifier Nothing FocusOut
                     containerAdd widget box
-                    listStoreClear listStore
-                    mapM_ (listStoreAppend listStore)
+                    seqStoreClear seqStore
+                    mapM_ (seqStoreAppend seqStore)
                         (case mbSort of
                             Nothing -> vs
                             Just sortF -> sortF vs)
-                    on addButton buttonActivated $ do
+                    onButtonClicked addButton $ do
                         mbv <- extS
                         case mbv of
                             Just v -> do
                                 case mbReplace of
                                     Nothing         -> return ()
                                     Just replaceF   -> do
-                                         cont <- listStoreToList listStore
-                                         mapM_ (listStoreRemove listStore . fst)
+                                         cont <- seqStoreToList seqStore
+                                         mapM_ (seqStoreRemove seqStore . fst)
                                             . filter (\(_,e) -> replaceF v e)
                                                 $ zip [0..] cont
                                 case mbSort of
                                     Nothing    -> do
-                                        listStoreAppend listStore v
+                                        seqStoreAppend seqStore v
                                         return ()
                                     Just sortF -> do
-                                        cont <- listStoreToList listStore
-                                        listStoreClear listStore
-                                        mapM_ (listStoreAppend listStore) (sortF (v:cont))
-                                cont <- listStoreToList listStore
+                                        cont <- seqStoreToList seqStore
+                                        seqStoreClear seqStore
+                                        mapM_ (seqStoreAppend seqStore) (sortF (v:cont))
+                                cont <- seqStoreToList seqStore
                                 case elemIndex v cont of
                                     Just idx -> do
-                                        treeSelectionSelectPath sel [idx]
-                                        mbCol <- treeViewGetColumn treeView 0
-                                        case mbCol of
-                                            Nothing  -> return ()
-                                            Just col -> treeViewScrollToCell treeView (Just [idx]) Nothing Nothing
+                                        path <- treePathNewFromIndices' [fromIntegral idx]
+                                        treeSelectionSelectPath sel path
+                                        treeViewScrollToCell treeView (Just path) noTreeViewColumn False 0.0 0.0
                                     Nothing -> return ()
                             Nothing -> return ()
-                    on removeButton buttonActivated $ do
+                    onButtonClicked removeButton $ do
                         mbi <- treeSelectionGetSelected sel
                         case mbi of
-                            Nothing -> return ()
-                            Just iter -> do
-                                [i] <- treeModelGetPath listStore iter
-                                listStoreRemove listStore i
-                    writeIORef coreRef (Just listStore)
+                            (True, _, iter) -> do
+                                [i] <- treeModelGetPath seqStore iter >>= treePathGetIndices
+                                seqStoreRemove seqStore i
+                            _ -> return ()
+                    writeIORef coreRef (Just seqStore)
                     injS getDefault
-                Just listStore -> do
-                    listStoreClear listStore
-                    mapM_ (listStoreAppend listStore)
+                Just seqStore -> do
+                    seqStoreClear seqStore
+                    mapM_ (seqStoreAppend seqStore)
                         (case mbSort of
                             Nothing -> vs
                             Just sortF -> sortF vs))
         (do core <- readIORef coreRef
             case core of
                 Nothing -> return Nothing
-                Just listStore -> do
-                    v <- listStoreToList listStore
+                Just seqStore -> do
+                    v <- seqStoreToList seqStore
                     return (Just v))
         (paraMinSize <<<- ParaMinSize (-1,-1) $ parameters)
         notifier
     where
---    selectionHandler :: TreeSelection -> ListStore a -> Injector a -> IO ()
-    selectionHandler sel listStore inj = do
+--    selectionHandler :: TreeSelection -> SeqStore a -> Injector a -> IO ()
+    selectionHandler sel seqStore inj = do
         ts <- treeSelectionGetSelected sel
         case ts of
-            Nothing -> return ()
-            Just iter -> do
-                [i] <- treeModelGetPath listStore iter
-                v <- listStoreGetValue listStore i
+            (True, _, iter) -> do
+                [i] <- treeModelGetPath seqStore iter >>= treePathGetIndices
+                v <- seqStoreGetValue seqStore i
                 inj v
                 return ()
+            _ -> return ()
 
 
 filesEditor :: Maybe FilePath -> FileChooserAction -> Text -> Editor [FilePath]
 filesEditor fp act label p =
     multisetEditor
-        (ColumnDescr False [("", \ row -> [cellText := T.pack row])])
+        (ColumnDescr False [("", \ row -> [_text := T.pack row])])
         (fileEditor fp act label, emptyParams)
         (Just sort)
         (Just (==))
-        (paraShadow <<<- ParaShadow ShadowIn $
+        (paraShadow <<<- ParaShadow ShadowTypeIn $
             paraDirection  <<<- ParaDirection Vertical $ p)
 
 textsEditor :: (Text -> Bool) -> Bool -> Editor [Text]
 textsEditor validation trimBlanks p =
     multisetEditor
-        (ColumnDescr False [("", \ row -> [cellText := row])])
+        (ColumnDescr False [("", \ row -> [_text := row])])
         (textEditor validation trimBlanks, emptyParams)
         (Just sort)
         (Just (==))
-        (paraShadow <<<- ParaShadow ShadowIn $ p)
+        (paraShadow <<<- ParaShadow ShadowTypeIn $ p)
 
 dependencyEditor :: [PackageIdentifier] -> Editor Dependency
 dependencyEditor packages para noti = do
@@ -728,15 +729,15 @@ dependencyEditor packages para noti = do
 dependenciesEditor :: [PackageIdentifier] -> Editor [Dependency]
 dependenciesEditor packages p =
     multisetEditor
-        (ColumnDescr True [("Package",\(Dependency (PackageName str) _) -> [cellText := T.pack str])
-                           ,("Version",\(Dependency _ vers) -> [cellText := T.pack $ display vers])])
+        (ColumnDescr True [("Package",\(Dependency (PackageName str) _) -> [_text := T.pack str])
+                           ,("Version",\(Dependency _ vers) -> [_text := T.pack $ display vers])])
         (dependencyEditor packages,
             paraOuterAlignment <<<- ParaInnerAlignment (0.0, 0.5, 1.0, 1.0)
                 $ paraInnerAlignment <<<- ParaOuterAlignment (0.0, 0.5, 1.0, 1.0)
                    $ emptyParams)
         (Just (sortBy (\ (Dependency p1 _) (Dependency p2 _) -> compare p1 p2)))
         (Just (\ (Dependency p1 _) (Dependency p2 _) -> p1 == p2))
-        (paraShadow <<<- ParaShadow ShadowIn
+        (paraShadow <<<- ParaShadow ShadowTypeIn
             $ paraOuterAlignment <<<- ParaInnerAlignment (0.0, 0.5, 1.0, 1.0)
                 $ paraInnerAlignment <<<- ParaOuterAlignment (0.0, 0.5, 1.0, 1.0)
                     $ paraDirection  <<<-  ParaDirection Vertical
@@ -760,9 +761,9 @@ versionRangeEditor para noti = do
                (tupel3Editor
                   (comboSelectionEditor v2 (T.pack . show), emptyParams)
                   (versionRangeEditor,
-                   paraShadow <<<- ParaShadow ShadowIn $ emptyParams)
+                   paraShadow <<<- ParaShadow ShadowTypeIn $ emptyParams)
                   (versionRangeEditor,
-                   paraShadow <<<- ParaShadow ShadowIn $ emptyParams),
+                   paraShadow <<<- ParaShadow ShadowTypeIn $ emptyParams),
                 paraName <<<- ParaName "Complex" $
                   paraDirection <<<- ParaDirection Vertical $
                     paraOuterAlignment <<<- ParaOuterAlignment (0.0, 0.0, 0.0, 0.0) $

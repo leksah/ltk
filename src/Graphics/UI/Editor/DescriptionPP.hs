@@ -21,7 +21,6 @@ module Graphics.UI.Editor.DescriptionPP (
 ,   flattenFieldDescriptionPPToS
 ) where
 
-import Graphics.UI.Gtk
 import Control.Monad
 import qualified Text.PrettyPrint.HughesPJ as PP
 import qualified Text.ParserCombinators.Parsec as P
@@ -36,6 +35,7 @@ import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Maybe (fromMaybe)
 import qualified Control.Arrow as A (Arrow(..))
+import GI.Gtk.Objects.Widget (Widget(..))
 
 data FieldDescriptionPP alpha gamma =  FDPP {
         parameters      ::  Parameters
