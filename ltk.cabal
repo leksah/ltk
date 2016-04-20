@@ -46,9 +46,9 @@ library
         transformers >=0.2.2.0 && <0.5,
         ghc -any,
         haskell-gi-base >=0.13 && <0.14,
-        gi-glib >=0.2.44 && <0.2.47,
-        gi-gobject >=0.2.44 && <0.2.47,
-        gi-gdk >=0.3.16 && <0.3.19,
-        gi-gtk >=0.3.16 && <0.3.19,
+        gi-glib >=0.2.44 && <0.2.49,
+        gi-gobject >=0.2.44 && <0.2.49,
+        gi-gdk >=0.3.16 && <0.3.21,
+        gi-gtk >=0.3.16 && <0.3.21,
         gi-gtk-hs >=0.1.1.0 && <0.2
     hs-source-dirs: src
