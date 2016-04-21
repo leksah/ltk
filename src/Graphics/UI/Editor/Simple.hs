@@ -618,7 +618,7 @@ staticListMultiEditor list showF parameters notifier = do
                         name <- eventKeyReadKeyval e >>= keyvalName
                         liftIO $
                             case name of
-                                "Return" -> do
+                                Just "Return" -> do
                                     sel <- treeViewGetSelection listView
                                     rows <- treeSelectionGetSelectedRows' sel >>= mapM treePathGetIndices'
                                     mapM_ (\ (i:_) -> do
@@ -760,7 +760,7 @@ fileEditor mbFilePath action buttonName parameters notifier = do
                 ResponseTypeAccept -> do
                     f <- fileChooserGetFilename dialog
                     widgetDestroy dialog
-                    return $ Just f
+                    return f
                 ResponseTypeCancel -> do
                     widgetDestroy dialog
                     return Nothing

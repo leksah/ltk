@@ -254,7 +254,8 @@ notebookInsertOrdered nb widget labelStr mbLabel isGroup = do
                         Just l  -> return l
     menuLabel   <-  labelNew (Just labelStr)
     numPages    <-  notebookGetNPages nb
-    widgets     <-  mapM (notebookGetNthPage nb) [0 .. (numPages-1)]
+    mbWidgets   <-  mapM (notebookGetNthPage nb) [0 .. (numPages-1)]
+    let widgets =   map (`forceJust` "ViewFrame.notebookInsertOrdered: no widget") mbWidgets
     labelStrs   <-  mapM widgetGetName widgets
     let pos     =   fromMaybe (-1)
                       (findIndex
@@ -464,7 +465,7 @@ viewSplit' panePath dir = do
         _                            -> do
             activeNotebook  <- getNotebook' "viewSplit" panePath
             ind <- notebookGetCurrentPage activeNotebook
-            parent <- widgetGetParent activeNotebook >>= liftIO . unsafeCastTo Container
+            parent <- widgetGetParent activeNotebook >>= liftIO . unsafeCastTo Container . fromJust
             let (name,altname,paneDir,
                  oldPath,newPath) =  case dir of
                                         Horizontal  -> ("top",
@@ -581,8 +582,8 @@ viewCollapse' panePath = trace "viewCollapse' called" $ do
                             let ! newMap = Map.delete (unsafeManagedPtrCastPtr otherSideNotebook) (panePathFromNB st)
                             setPanePathFromNB newMap
                             -- 3. Remove one level and reparent notebook
-                            parent <- widgetGetParent activeNotebook >>= liftIO . unsafeCastTo Container
-                            grandparent <- widgetGetParent parent >>= liftIO . unsafeCastTo Container
+                            parent <- widgetGetParent activeNotebook >>= liftIO . unsafeCastTo Container . fromJust
+                            grandparent <- widgetGetParent parent >>= liftIO . unsafeCastTo Container . fromJust
                             nbIndex <- liftIO $ castTo Notebook grandparent >>= \case
                                             Just notebook -> notebookPageNum notebook parent
                                             Nothing -> return (-1)
@@ -757,7 +758,7 @@ closeGroup groupName = do
                 results <- mapM (\ (PaneC p) -> closePane p) panes
                 when (and results) $ do
                     nbOrPaned  <- getNotebookOrPaned path return
-                    parent <- widgetGetParent nbOrPaned >>= liftIO. unsafeCastTo Container
+                    parent <- widgetGetParent nbOrPaned >>= liftIO. unsafeCastTo Container . fromJust
                     containerRemove parent nbOrPaned
                     setLayoutSt (removeGL path layout)
                     ppMap <- getPanePathFromNB
@@ -774,7 +775,7 @@ viewDetach = do
 viewDetach' :: PaneMonad alpha => PanePath -> Text -> alpha (Maybe (Window, Notebook))
 viewDetach' panePath id = do
     activeNotebook  <- getNotebook' "viewDetach'" panePath
-    parent <- widgetGetParent activeNotebook >>= liftIO . unsafeCastTo Container
+    parent <- widgetGetParent activeNotebook >>= liftIO . unsafeCastTo Container . fromJust
     layout          <-  getLayoutSt
     let paneLayout  =   layoutFromPath panePath layout
     case paneLayout of
@@ -846,13 +847,15 @@ groupMenuLabel :: PaneMonad beta => Text -> beta (Maybe Label)
 groupMenuLabel group = liftM Just (labelNew (Just group))
 
 handleNotebookSwitch :: PaneMonad beta => Notebook -> Int -> beta ()
-handleNotebookSwitch nb index = do
-    w <- notebookGetNthPage nb (fromIntegral index)
-    name   <-  widgetGetName w
-    mbPane <-  findPaneFor name
-    case mbPane of
-        Nothing         ->  return ()
-        Just (PaneC p)  ->  makeActive p
+handleNotebookSwitch nb index =
+    notebookGetNthPage nb (fromIntegral index) >>= \case
+        Nothing -> error "ViewFrame/handleNotebookSwitch: Can't find widget"
+        Just w  -> do
+            name   <- widgetGetName w
+            mbPane <- findPaneFor name
+            case mbPane of
+                Nothing         ->  return ()
+                Just (PaneC p)  ->  makeActive p
   where
         findPaneFor :: PaneMonad beta => Text -> beta (Maybe (IDEPane beta))
         findPaneFor n1   =   do
@@ -1070,10 +1073,12 @@ newNotebook pp = do
             Word32 ->
             Word32 ->
             IO ()
-        dragFunc nb func cont x y data_ id timeStamp = do
-            str <- selectionDataGetText data_
-            trace ("dragFunc str=" <> T.unpack str) $ return ()
-            func (str,nb)
+        dragFunc nb func cont x y data_ id timeStamp =
+            selectionDataGetText data_ >>= \case
+                Nothing  -> return ()
+                Just str -> do
+                    trace ("dragFunc str=" <> T.unpack str) $ return ()
+                    func (str,nb)
 
 terminalsWithPanePath :: PaneLayout -> [(PanePath,PaneLayout)]
 terminalsWithPanePath pl = map (first reverse) $ terminalsWithPP [] pl
