@@ -34,7 +34,8 @@ import Control.Monad.IO.Class (MonadIO)
 #if MIN_VERSION_gi_gdk(0,3,18)
 import GI.Gdk (Rectangle(..), rectangleWidth, rectangleHeight, rectangleX, rectangleY, rectangleReadWidth, rectangleReadHeight, rectangleReadX, rectangleReadY)
 #else
-import GI.Cairo (RectangleInt(..), rectangleIntReadWidth, rectangleIntReadHeight, rectangleIntReadX, rectangleIntReadY)
+import Data.Int (Int32)
+import GI.Cairo (RectangleInt(..), rectangleIntWidth, rectangleIntHeight, rectangleIntX, rectangleIntY, rectangleIntReadWidth, rectangleIntReadHeight, rectangleIntReadX, rectangleIntReadY)
 #endif
 
 #if !MIN_VERSION_gi_gdk(0,3,18)
@@ -43,9 +44,13 @@ rectangleWidth      = rectangleIntWidth
 rectangleHeight     = rectangleIntHeight
 rectangleX          = rectangleIntX
 rectangleY          = rectangleIntY
+rectangleReadWidth :: MonadIO m => Rectangle -> m Int32
 rectangleReadWidth  = rectangleIntReadWidth
+rectangleReadHeight :: MonadIO m => Rectangle -> m Int32
 rectangleReadHeight = rectangleIntReadHeight
+rectangleReadX :: MonadIO m => Rectangle -> m Int32
 rectangleReadX      = rectangleIntReadX
+rectangleReadY :: MonadIO m => Rectangle -> m Int32
 rectangleReadY      = rectangleIntReadY
 newRectangle :: MonadIO m => [AttrOp Rectangle AttrSet] -> m Rectangle
 newRectangle = new RectangleInt
