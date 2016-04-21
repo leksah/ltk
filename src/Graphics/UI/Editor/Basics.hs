@@ -42,13 +42,14 @@ module Graphics.UI.Editor.Basics (
 ,   propagateAsChanged
 ) where
 
-import Prelude
+import Prelude ()
+import Prelude.Compat
 import Text.Show
 
 import Data.Unique
 import Data.IORef
 import Data.Text (Text)
-import Control.Monad
+import Control.Monad (foldM, void)
 import Control.Monad.Trans (liftIO)
 
 import Graphics.UI.Editor.Parameters

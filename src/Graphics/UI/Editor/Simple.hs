@@ -40,9 +40,11 @@ module Graphics.UI.Editor.Simple (
 ,   okCancelFields
 ) where
 
-import Control.Monad
+import Prelude ()
+import Prelude.Compat
+import Control.Monad (void, (>=>), when, liftM)
 import Data.IORef
-import Data.List
+import Data.List (elemIndex)
 import Data.Maybe
 import Data.Int (Int32)
 import System.FilePath.Posix
@@ -58,11 +60,10 @@ import Graphics.UI.Editor.Basics
         genericGUIEvents, activateEvent, Editor)
 import Control.Exception as E (catch, IOException)
 import Control.Monad.IO.Class (MonadIO(..))
-import Control.Applicative ((<$>))
 import qualified Data.Text as T (strip, unpack, pack, empty)
 import Data.Monoid ((<>))
 import Data.Text (Text)
-import Data.GI.Base (new, GObject(..), unsafeCastTo)
+import Data.GI.Base (new, GObject(..), unsafeCastTo, nullToNothing)
 import GI.Gtk
        (noAdjustment, setCellRendererToggleActive,
         RadioButton, pattern STOCK_CANCEL, pattern STOCK_OK,
@@ -758,7 +759,7 @@ fileEditor mbFilePath action buttonName parameters notifier = do
             response <- dialogRun dialog
             case toEnum $ fromIntegral response of
                 ResponseTypeAccept -> do
-                    f <- fileChooserGetFilename dialog
+                    f <- nullToNothing $ fileChooserGetFilename dialog
                     widgetDestroy dialog
                     return f
                 ResponseTypeCancel -> do

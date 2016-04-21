@@ -46,6 +46,8 @@ module Graphics.UI.Editor.Parameters (
 ,   HorizontalAlign(..)
 ) where
 
+import Prelude ()
+import Prelude.Compat
 import Data.Maybe
 import Data.Text (Text)
 import qualified Data.List as List
@@ -83,7 +85,7 @@ dialogSetDefaultResponse' d r = dialogSetDefaultResponse d (fromIntegral $ fromE
 dialogResponse' :: (MonadIO m, DialogK d) => d -> ResponseType -> m ()
 dialogResponse' d r = dialogResponse d (fromIntegral $ fromEnum r)
 
-dialogRun' :: (MonadIO m, DialogK d) => d -> m ResponseType
+dialogRun' :: (Applicative m, MonadIO m, DialogK d) => d -> m ResponseType
 dialogRun' d = toEnum . fromIntegral <$> dialogRun d
 
 --

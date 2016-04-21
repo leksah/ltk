@@ -98,8 +98,11 @@ module Graphics.UI.Frame.ViewFrame (
 ,   initGtkRc
 ) where
 
+import Prelude ()
+import Prelude.Compat
+import Control.Applicative (Applicative)
 import qualified Data.Map as Map
-import Data.List
+import Data.List (findIndex, isPrefixOf, deleteBy, stripPrefix, elemIndex)
 import Data.Maybe
 import Data.Unique
 import Data.Typeable
@@ -169,12 +172,12 @@ import GI.Gtk.Enums
 import GI.Gtk.Flags (DestDefaults(..), IconLookupFlags(..))
 import GI.Gdk.Flags (ModifierType(..), DragAction(..))
 import GI.Gdk
-       (DragContext, Screen, rectangleReadHeight,
-        rectangleReadWidth, Rectangle, eventButtonReadState)
+       (DragContext, Screen, eventButtonReadState)
+import Graphics.UI.Frame.Rectangle (rectangleReadWidth, rectangleReadHeight)
 import Data.GI.Base
        (unsafeManagedPtrCastPtr, withManagedPtr, castTo, unsafeCastTo,
         ForeignPtrNewtype, UnexpectedNullPointerReturn(..), GObject(..),
-        new, AttrOp(..))
+        new, AttrOp(..), nullToNothing)
 import Control.Exception (catch)
 import Data.Int (Int32)
 import Data.Word (Word32)
@@ -186,7 +189,6 @@ import GI.Gtk.Objects.Dialog (dialogUseHeaderBar)
 import GI.Gtk.Objects.MessageDialog
        (messageDialogButtons, messageDialogMessageType)
 import GI.Gtk.Objects.Label (noLabel)
-import Data.GI.Base.BasicTypes (NullToNothing(..))
 
 -- import Debug.Trace (trace)
 trace (a::String) b = b
@@ -254,7 +256,7 @@ notebookInsertOrdered nb widget labelStr mbLabel isGroup = do
                         Just l  -> return l
     menuLabel   <-  labelNew (Just labelStr)
     numPages    <-  notebookGetNPages nb
-    mbWidgets   <-  mapM (notebookGetNthPage nb) [0 .. (numPages-1)]
+    mbWidgets   <-  mapM (nullToNothing . notebookGetNthPage nb) [0 .. (numPages-1)]
     let widgets =   map (`forceJust` "ViewFrame.notebookInsertOrdered: no widget") mbWidgets
     labelStrs   <-  mapM widgetGetName widgets
     let pos     =   fromMaybe (-1)
@@ -465,7 +467,7 @@ viewSplit' panePath dir = do
         _                            -> do
             activeNotebook  <- getNotebook' "viewSplit" panePath
             ind <- notebookGetCurrentPage activeNotebook
-            parent <- widgetGetParent activeNotebook >>= liftIO . unsafeCastTo Container . fromJust
+            parent <- nullToNothing (widgetGetParent activeNotebook) >>= liftIO . unsafeCastTo Container . fromJust
             let (name,altname,paneDir,
                  oldPath,newPath) =  case dir of
                                         Horizontal  -> ("top",
@@ -582,8 +584,8 @@ viewCollapse' panePath = trace "viewCollapse' called" $ do
                             let ! newMap = Map.delete (unsafeManagedPtrCastPtr otherSideNotebook) (panePathFromNB st)
                             setPanePathFromNB newMap
                             -- 3. Remove one level and reparent notebook
-                            parent <- widgetGetParent activeNotebook >>= liftIO . unsafeCastTo Container . fromJust
-                            grandparent <- widgetGetParent parent >>= liftIO . unsafeCastTo Container . fromJust
+                            parent <- nullToNothing (widgetGetParent activeNotebook) >>= liftIO . unsafeCastTo Container . fromJust
+                            grandparent <- nullToNothing (widgetGetParent parent) >>= liftIO . unsafeCastTo Container . fromJust
                             nbIndex <- liftIO $ castTo Notebook grandparent >>= \case
                                             Just notebook -> notebookPageNum notebook parent
                                             Nothing -> return (-1)
@@ -671,7 +673,7 @@ bringGroupToFront groupName = do
 
 --  Yet another stupid little dialog
 
-groupNameDialog :: MonadIO m => Window -> m (Maybe Text)
+groupNameDialog :: (Applicative m, MonadIO m) => Window -> m (Maybe Text)
 groupNameDialog parent = do
     dia                        <-   dialogNew
     setWindowTransientFor dia parent
@@ -758,7 +760,7 @@ closeGroup groupName = do
                 results <- mapM (\ (PaneC p) -> closePane p) panes
                 when (and results) $ do
                     nbOrPaned  <- getNotebookOrPaned path return
-                    parent <- widgetGetParent nbOrPaned >>= liftIO. unsafeCastTo Container . fromJust
+                    parent <- nullToNothing (widgetGetParent nbOrPaned) >>= liftIO. unsafeCastTo Container . fromJust
                     containerRemove parent nbOrPaned
                     setLayoutSt (removeGL path layout)
                     ppMap <- getPanePathFromNB
@@ -775,7 +777,7 @@ viewDetach = do
 viewDetach' :: PaneMonad alpha => PanePath -> Text -> alpha (Maybe (Window, Notebook))
 viewDetach' panePath id = do
     activeNotebook  <- getNotebook' "viewDetach'" panePath
-    parent <- widgetGetParent activeNotebook >>= liftIO . unsafeCastTo Container . fromJust
+    parent <- nullToNothing (widgetGetParent activeNotebook) >>= liftIO . unsafeCastTo Container . fromJust
     layout          <-  getLayoutSt
     let paneLayout  =   layoutFromPath panePath layout
     case paneLayout of
@@ -848,7 +850,7 @@ groupMenuLabel group = liftM Just (labelNew (Just group))
 
 handleNotebookSwitch :: PaneMonad beta => Notebook -> Int -> beta ()
 handleNotebookSwitch nb index =
-    notebookGetNthPage nb (fromIntegral index) >>= \case
+    nullToNothing (notebookGetNthPage nb (fromIntegral index)) >>= \case
         Nothing -> error "ViewFrame/handleNotebookSwitch: Can't find widget"
         Just w  -> do
             name   <- widgetGetName w

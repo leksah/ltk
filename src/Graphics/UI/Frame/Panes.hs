@@ -35,6 +35,9 @@ module Graphics.UI.Frame.Panes (
 ,   signalDisconnectAll
 ) where
 
+import Prelude ()
+import Prelude.Compat
+import Control.Applicative (Applicative)
 import Data.Maybe
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -156,7 +159,7 @@ class (Pane alpha delta, Typeable beta, Show beta, Read beta) => RecoverablePane
 
 
 
-class MonadIO delta =>  PaneMonad delta where
+class (Applicative delta, MonadIO delta) =>  PaneMonad delta where
     setFrameState   ::  FrameState delta -> delta ()
     getFrameState   ::  delta (FrameState delta)
     runInIO         ::  forall alpha beta. (beta -> delta alpha) -> delta (beta -> IO alpha)

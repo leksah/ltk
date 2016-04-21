@@ -30,7 +30,9 @@ module Graphics.UI.Editor.MakeEditor (
 
 ) where
 
-import Control.Monad
+import Prelude ()
+import Prelude.Compat
+import Control.Monad (foldM, when)
 import Data.List (unzip4, intersperse)
 import Data.Text (Text)
 import Data.Monoid ((<>), mconcat)
@@ -123,7 +125,7 @@ newNotebook = do
     setNotebookEnablePopup nb True
     return nb
 
-buildEditor :: MonadIO m => FieldDescription alpha -> alpha -> m (Widget, Injector alpha , alpha -> Extractor alpha , Notifier)
+buildEditor :: (Applicative m, MonadIO m) => FieldDescription alpha -> alpha -> m (Widget, Injector alpha , alpha -> Extractor alpha , Notifier)
 buildEditor (FD paras editorf) v  =  liftIO $ editorf v
 buildEditor (HFD paras descrs) v =   buildBoxEditor descrs Horizontal v
 buildEditor (VFD paras descrs) v =   buildBoxEditor descrs Vertical v
@@ -172,7 +174,7 @@ buildEditor (NFD pairList)     v =   do
     widget <- liftIO $ toWidget hb
     return (widget, newInj, newExt, notifier)
 
-buildBoxEditor :: MonadIO m => [FieldDescription alpha] -> Direction -> alpha
+buildBoxEditor :: (Applicative m, MonadIO m) => [FieldDescription alpha] -> Direction -> alpha
     -> m (Widget, Injector alpha , alpha -> Extractor alpha , Notifier)
 buildBoxEditor descrs dir v = do
     resList <- mapM (`buildEditor` v) descrs
