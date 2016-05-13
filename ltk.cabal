@@ -47,10 +47,10 @@ library
         pretty >=1.0.1.0 && <1.2,
         transformers >=0.2.2.0 && <0.5,
         ghc -any,
-        haskell-gi-base >=0.13 && <0.14,
+        haskell-gi-base >=0.14 && <0.15,
         gi-glib >=0.2.44 && <0.2.49,
         gi-gobject >=0.2.44 && <0.2.49,
-        gi-cairo >=0.1.14 && <0.1.15,
+        gi-cairo >=0.1.14 && <0.1.16,
         gi-gdk >=0.3.16 && <0.3.21,
         gi-gtk >=0.3.16 && <0.3.21,
         gi-gtk-hs >=0.1.1.0 && <0.2
