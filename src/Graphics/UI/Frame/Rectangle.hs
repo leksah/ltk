@@ -31,14 +31,17 @@ module Graphics.UI.Frame.Rectangle (
 import Data.GI.Base (new, AttrOp)
 import Data.GI.Base.Attributes (AttrOpTag(..))
 import Control.Monad.IO.Class (MonadIO)
-#if MIN_VERSION_gi_gdk(0,3,18)
+#ifdef MIN_VERSION_GDK_3_18
 import GI.Gdk (Rectangle(..), rectangleWidth, rectangleHeight, rectangleX, rectangleY, rectangleReadWidth, rectangleReadHeight, rectangleReadX, rectangleReadY)
 #else
 import Data.Int (Int32)
 import GI.Cairo (RectangleInt(..), rectangleIntWidth, rectangleIntHeight, rectangleIntX, rectangleIntY, rectangleIntReadWidth, rectangleIntReadHeight, rectangleIntReadX, rectangleIntReadY)
 #endif
 
-#if !MIN_VERSION_gi_gdk(0,3,18)
+#ifdef MIN_VERSION_GDK_3_18
+newRectangle :: MonadIO m => [AttrOp Rectangle AttrSet] -> m Rectangle
+newRectangle = new Rectangle
+#else
 type Rectangle      = RectangleInt
 rectangleWidth      = rectangleIntWidth
 rectangleHeight     = rectangleIntHeight
@@ -54,7 +57,4 @@ rectangleReadY :: MonadIO m => Rectangle -> m Int32
 rectangleReadY      = rectangleIntReadY
 newRectangle :: MonadIO m => [AttrOp Rectangle AttrSet] -> m Rectangle
 newRectangle = new RectangleInt
-#else
-newRectangle :: MonadIO m => [AttrOp Rectangle AttrSet] -> m Rectangle
-newRectangle = new Rectangle
 #endif

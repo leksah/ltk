@@ -20,6 +20,10 @@ source-repository head
     type: git
     location: https://github.com/leksah/ltk
 
+flag gdk-318
+    description:
+        GDK is 3.18 or later
+
 library
     exposed-modules:
         Default
@@ -55,3 +59,7 @@ library
         gi-gtk >=3.0.2 && <3.1,
         gi-gtk-hs >=0.2.0.0 && <0.3
     hs-source-dirs: src
+
+    if flag(gdk-318)
+        pkgconfig-depends: gdk-3.0 >= 3.18
+        cpp-options:       -DMIN_VERSION_GDK_3_18
