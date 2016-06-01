@@ -93,7 +93,7 @@ import GI.Gtk
         boxPackStart, radioButtonNewWithLabelFromWidget,
         radioButtonNewWithLabel, vBoxNew, toggleButtonGetActive, toWidget,
         toggleButtonSetActive, setWidgetName, checkButtonNewWithLabel,
-        containerAdd)
+        containerAdd, onWidgetScrollEvent)
 import GI.Gtk.Enums
        (ResponseType(..), SelectionMode(..), PolicyType(..), IconSize(..))
 import Data.GI.Gtk.ComboBox
@@ -108,8 +108,8 @@ import Data.GI.Gtk.ModelView.SeqStore
 import Data.GI.Gtk.ModelView.Types
        (treeSelectionGetSelectedRows', treePathGetIndices',
         treePathNewFromIndices', stringToTreePath)
-import GI.Gdk (keyvalName, eventKeyReadKeyval)
-import GI.GObject (objectNew)
+import GI.Gdk (keyvalName, eventKeyReadKeyval, EventScroll)
+import GI.GObject (objectNew, signalStopEmissionByName)
 import Text.PrinterParser (Color(..), toGdkColor, fromGdkColor)
 
 -- ------------------------------------------------------------
@@ -382,6 +382,8 @@ intEditor (min, max, step) parameters notifier = do
                 Nothing  -> do
                     spin <- spinButtonNewWithRange min max step
                     widgetSetName spin (getParameter paraName parameters)
+                    -- ignore scroll event, propagate to parent widget
+                    onWidgetScrollEvent spin (\_ -> signalStopEmissionByName spin "scroll-event" >> return False)
                     mapM_ (activateEvent spin notifier Nothing) genericGUIEvents
                     activateEvent spin notifier
                         (Just (\ w h ->
@@ -450,6 +452,8 @@ comboSelectionEditor list showF parameters notifier = do
                 Nothing  -> do
                     combo <- comboBoxNewText
                     widgetSetSizeRequest combo 200 (-1)
+                    -- ignore scroll event, propagate to parent widget
+                    onWidgetScrollEvent combo (\_ -> signalStopEmissionByName combo "scroll-event" >> return False)
                     mapM_ (comboBoxAppendText combo . showF) list
                     widgetSetName combo (getParameter paraName parameters)
                     mapM_ (activateEvent combo notifier Nothing) genericGUIEvents
@@ -905,4 +909,3 @@ okCancelFields = HFD emptyParams [
             (const ())
             (\ a b -> b)
             (clickEditor True)]
-
