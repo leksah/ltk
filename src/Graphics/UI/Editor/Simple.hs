@@ -99,7 +99,7 @@ import GI.Gtk.Enums
 import Data.GI.Gtk.ComboBox
        (comboBoxSetModelText, comboBoxAppendText, comboBoxNewText)
 import Data.GI.Gtk.ModelView.CellLayout
-       (cellLayoutSetAttributeFunc)
+       (cellLayoutSetDataFunction)
 import Data.GI.Gtk.ModelView.CustomStore
        (CustomStore(..), customStoreGetRow)
 import Data.GI.Gtk.ModelView.SeqStore
@@ -548,8 +548,8 @@ multiselectionEditor parameters notifier = do
                     col         <- treeViewColumnNew
                     treeViewAppendColumn listView col
                     cellLayoutPackStart col renderer True
-                    cellLayoutSetAttributeFunc col renderer seqStore (
-                        customStoreGetRow seqStore >=> setCellRendererTextText renderer . T.pack . show)
+                    cellLayoutSetDataFunction col renderer seqStore
+                        (setCellRendererTextText renderer . T.pack . show)
                     treeViewSetHeadersVisible listView False
                     seqStoreClear seqStore
                     mapM_ (seqStoreAppend seqStore) objs
@@ -597,13 +597,13 @@ staticListMultiEditor list showF parameters notifier = do
                     col1 <- treeViewColumnNew
                     treeViewAppendColumn listView col1
                     cellLayoutPackStart col1 rendererToggle True
-                    cellLayoutSetAttributeFunc col1 rendererToggle seqStore (
-                        customStoreGetRow seqStore >=> setCellRendererToggleActive rendererToggle . fst)
+                    cellLayoutSetDataFunction col1 rendererToggle seqStore
+                        (setCellRendererToggleActive rendererToggle . fst)
                     col2 <- treeViewColumnNew
                     treeViewAppendColumn listView col2
                     cellLayoutPackStart col2 rendererText True
-                    cellLayoutSetAttributeFunc col2 rendererText seqStore (
-                        customStoreGetRow seqStore >=> setCellRendererTextText rendererText . showF . snd)
+                    cellLayoutSetDataFunction col2 rendererText seqStore
+                        (setCellRendererTextText rendererText . showF . snd)
                     treeViewSetHeadersVisible listView False
                     seqStoreClear seqStore
                     mapM_ (seqStoreAppend seqStore . (\ e -> (e `elem` objs, e))) list
@@ -671,8 +671,8 @@ staticListEditor list showF parameters notifier = do
                     col <- treeViewColumnNew
                     treeViewAppendColumn listView col
                     cellLayoutPackStart col renderer True
-                    cellLayoutSetAttributeFunc col renderer seqStore (
-                        customStoreGetRow seqStore >=> (setCellRendererTextText renderer . showF))
+                    cellLayoutSetDataFunction col renderer seqStore
+                        (setCellRendererTextText renderer . showF)
                     treeViewSetHeadersVisible listView False
                     seqStoreClear seqStore
                     mapM_ (seqStoreAppend seqStore) list

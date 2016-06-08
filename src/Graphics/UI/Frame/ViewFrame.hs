@@ -177,7 +177,7 @@ import Graphics.UI.Frame.Rectangle (rectangleReadWidth, rectangleReadHeight)
 import Data.GI.Base
        (unsafeManagedPtrCastPtr, withManagedPtr, castTo, unsafeCastTo,
         ForeignPtrNewtype, UnexpectedNullPointerReturn(..), GObject(..),
-        new, AttrOp(..), nullToNothing)
+        new', nullToNothing)
 import Control.Exception (catch)
 import Data.Int (Int32)
 import Data.Word (Word32)
@@ -185,9 +185,9 @@ import Data.Function (on)
 import Data.Coerce (coerce)
 import Foreign.ForeignPtr (ForeignPtr)
 import Data.GI.Gtk.ModelView.Types (equalManagedPtr)
-import GI.Gtk.Objects.Dialog (dialogUseHeaderBar)
+import GI.Gtk.Objects.Dialog (constructDialogUseHeaderBar)
 import GI.Gtk.Objects.MessageDialog
-       (messageDialogButtons, messageDialogMessageType)
+       (constructMessageDialogButtons, setMessageDialogMessageType)
 import GI.Gtk.Objects.Label (noLabel)
 
 -- import Debug.Trace (trace)
@@ -638,9 +638,10 @@ viewNewGroup = do
             layout <- getLayoutSt
             if groupName `Set.member` allGroupNames layout
                 then do
-                    md <- new MessageDialog [dialogUseHeaderBar := 0,
-                                             messageDialogMessageType := MessageTypeWarning,
-                                             messageDialogButtons := ButtonsTypeClose]
+                    md <- new' MessageDialog [
+                        constructDialogUseHeaderBar 0,
+                        constructMessageDialogButtons ButtonsTypeClose]
+                    setMessageDialogMessageType md MessageTypeWarning
                     setMessageDialogText md $ "Group name not unique " <> groupName
                     windowSetTransientFor md (Just mainWindow)
                     dialogRun md
@@ -744,9 +745,10 @@ closeGroup groupName = do
                             $ map (second fst) (Map.assocs panesMap)
             continue <- case nameAndpathList of
                             (_:_) -> do
-                                md <- new MessageDialog [dialogUseHeaderBar := 0,
-                                                         messageDialogMessageType := MessageTypeQuestion,
-                                                         messageDialogButtons := ButtonsTypeYesNo]
+                                md <- new' MessageDialog [
+                                    constructDialogUseHeaderBar 0,
+                                    constructMessageDialogButtons ButtonsTypeYesNo]
+                                setMessageDialogMessageType md MessageTypeQuestion
                                 setMessageDialogText md $ "Group " <> groupName <> " not empty. Close with all contents?"
                                 windowSetTransientFor md (Just mainWindow)
                                 rid <- dialogRun md

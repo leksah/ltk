@@ -63,7 +63,6 @@ import GI.Gtk.Objects.CellRendererText
 import GI.Gtk.Objects.TreeViewColumn (treeViewColumnNew)
 import GI.Gtk.Interfaces.CellLayout
        (cellLayoutSetCellDataFunc, cellLayoutPackStart)
-import Data.GI.Base.Attributes (AttrOp(..))
 import Data.GI.Base.Signals (on)
 import GI.Gtk.Objects.HBox (hBoxNew)
 import GI.Gtk.Objects.Container

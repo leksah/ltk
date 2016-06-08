@@ -60,12 +60,11 @@ import MyMissing (forceJust)
 import Unsafe.Coerce (unsafeCoerce)
 import Debug.Trace (trace)
 import GI.Gtk
-       (noTreeViewColumn, noAdjustment,
-        FileChooserAction, treeModelGetPath,
-        treeSelectionGetSelected, treeViewScrollToCell, treeViewGetColumn,
-        treeSelectionSelectPath, onButtonClicked, onTreeSelectionChanged,
-        treeViewSetHeadersVisible, cellLayoutPackStart,
-        cellRendererTextNew, treeViewAppendColumn,
+       (setCellRendererTextText, noTreeViewColumn, noAdjustment,
+        FileChooserAction, treeModelGetPath, treeSelectionGetSelected,
+        treeViewScrollToCell, treeViewGetColumn, treeSelectionSelectPath,
+        onButtonClicked, onTreeSelectionChanged, treeViewSetHeadersVisible,
+        cellLayoutPackStart, cellRendererTextNew, treeViewAppendColumn,
         treeViewColumnSetResizable, treeViewColumnSetTitle,
         treeViewColumnNew, treeSelectionSetMode, treeViewGetSelection,
         scrolledWindowSetMinContentHeight, scrolledWindowSetPolicy,
@@ -77,20 +76,16 @@ import GI.Gtk
         panedPack2, panedPack1, hPanedNew, Paned(..), vPanedNew,
         containerAdd, boxPackStart, vBoxNew, Box(..), hBoxNew, Widget(..))
 import Data.GI.Base.ManagedPtr (unsafeCastTo, castTo)
-import Data.GI.Base.Attributes
-       (AttrLabelProxy(..), AttrOpTag(..), AttrOp(..), AttrOp)
 import GI.Gtk.Enums
        (ShadowType(..), SelectionMode(..), PolicyType(..))
 import Data.GI.Gtk.ModelView.CellLayout
-       (cellLayoutSetAttributes)
+       (cellLayoutSetDataFunction)
 import Data.GI.Gtk.ModelView.SeqStore
        (seqStoreAppend, seqStoreClear, seqStoreNew, seqStoreGetValue,
         seqStoreRemove, seqStoreToList, SeqStore(..))
 import Data.GI.Gtk.ModelView.Types
        (treePathNewFromIndices', equalManagedPtr)
 import GI.Gtk.Structs.TreePath (treePathGetIndices)
-
-_text = AttrLabelProxy :: AttrLabelProxy "text"
 
 --
 -- | An editor which composes two subeditors
@@ -558,7 +553,7 @@ eitherOrEditor (leftEditor,leftParams) (rightEditor,rightParams)
 -- and a nontrivial:
 --  [("Package",\(Dependency str _) -> [cellText := str])
 --  ,("Version",\(Dependency _ vers) -> [cellText := showVersionRange vers])])
-data ColumnDescr row = ColumnDescr Bool [(Text, row -> [AttrOp CellRendererText 'AttrSet])]
+data ColumnDescr row = ColumnDescr Bool [(Text, CellRendererText -> row -> IO ())]
 
 --
 -- | An editor with a subeditor, of which a list of items can be selected
@@ -613,7 +608,7 @@ multisetEditor (ColumnDescr showHeaders columnsDD) (singleEditor, sParams) mbSor
                             treeViewAppendColumn treeView col
                             renderer <- cellRendererTextNew
                             cellLayoutPackStart col renderer True
-                            cellLayoutSetAttributes col renderer seqStore func
+                            cellLayoutSetDataFunction col renderer seqStore (func renderer)
                         ) columnsDD
                     treeViewSetHeadersVisible treeView showHeaders
                     onTreeSelectionChanged sel $ selectionHandler sel seqStore injS
@@ -693,7 +688,7 @@ multisetEditor (ColumnDescr showHeaders columnsDD) (singleEditor, sParams) mbSor
 filesEditor :: Maybe FilePath -> FileChooserAction -> Text -> Editor [FilePath]
 filesEditor fp act label p =
     multisetEditor
-        (ColumnDescr False [("", \ row -> [_text := T.pack row])])
+        (ColumnDescr False [("", \cell -> setCellRendererTextText cell . T.pack)])
         (fileEditor fp act label, emptyParams)
         (Just sort)
         (Just (==))
@@ -703,7 +698,7 @@ filesEditor fp act label p =
 textsEditor :: (Text -> Bool) -> Bool -> Editor [Text]
 textsEditor validation trimBlanks p =
     multisetEditor
-        (ColumnDescr False [("", \ row -> [_text := row])])
+        (ColumnDescr False [("", setCellRendererTextText)])
         (textEditor validation trimBlanks, emptyParams)
         (Just sort)
         (Just (==))
@@ -729,8 +724,8 @@ dependencyEditor packages para noti = do
 dependenciesEditor :: [PackageIdentifier] -> Editor [Dependency]
 dependenciesEditor packages p =
     multisetEditor
-        (ColumnDescr True [("Package",\(Dependency (PackageName str) _) -> [_text := T.pack str])
-                           ,("Version",\(Dependency _ vers) -> [_text := T.pack $ display vers])])
+        (ColumnDescr True [("Package",\cell (Dependency (PackageName str) _) -> setCellRendererTextText cell $ T.pack str)
+                           ,("Version",\cell (Dependency _ vers) -> setCellRendererTextText cell $ T.pack $ display vers)])
         (dependencyEditor packages,
             paraOuterAlignment <<<- ParaInnerAlignment (0.0, 0.5, 1.0, 1.0)
                 $ paraInnerAlignment <<<- ParaOuterAlignment (0.0, 0.5, 1.0, 1.0)
