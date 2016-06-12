@@ -172,8 +172,8 @@ import GI.Gtk.Enums
 import GI.Gtk.Flags (DestDefaults(..), IconLookupFlags(..))
 import GI.Gdk.Flags (ModifierType(..), DragAction(..))
 import GI.Gdk
-       (DragContext, Screen, eventButtonReadState)
-import Graphics.UI.Frame.Rectangle (rectangleReadWidth, rectangleReadHeight)
+       (DragContext, Screen, getEventButtonState)
+import Graphics.UI.Frame.Rectangle (getRectangleWidth, getRectangleHeight)
 import Data.GI.Base
        (unsafeManagedPtrCastPtr, withManagedPtr, castTo, unsafeCastTo,
         ForeignPtrNewtype, UnexpectedNullPointerReturn(..), GObject(..),
@@ -331,7 +331,7 @@ mkLabelBox lbl paneName = do
     cl <- runInIO closeHandler
     onButtonClicked tabButton (cl ())
     onWidgetButtonReleaseEvent labelBox $ \e -> do
-        modifiers <- eventButtonReadState e
+        modifiers <- getEventButtonState e
         let middleButton = ModifierTypeButton2Mask
         when (middleButton `elem` modifiers) (cl ())
         return False
@@ -791,8 +791,8 @@ viewDetach' panePath id = do
                 Just (width, height) -> windowSetDefaultSize window (fromIntegral width) (fromIntegral height)
                 Nothing -> do
                     a <- widgetGetAllocation activeNotebook
-                    curWidth <- rectangleReadWidth a
-                    curHeight <- rectangleReadHeight a
+                    curWidth <- getRectangleWidth a
+                    curHeight <- getRectangleHeight a
                     windowSetDefaultSize window curWidth curHeight
             containerRemove parent activeNotebook
             containerAdd window activeNotebook

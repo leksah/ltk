@@ -63,9 +63,8 @@ import Control.Monad.IO.Class (MonadIO)
 import qualified GI.Gdk.Structs.Color as Gdk (Color(..))
 import Data.GI.Base.Constructible (Constructible(..))
 import GI.Gdk.Structs.Color
-       (colorReadBlue, colorReadGreen, colorReadRed, colorBlue,
-        colorGreen, colorRed)
-import Data.GI.Base.Attributes (AttrOp(..))
+       (getColorBlue, getColorGreen, getColorRed, setColorBlue,
+        setColorGreen, setColorRed)
 
 type Printer beta       =   beta -> PP.Doc
 type Parser beta        =   CharParser () beta
@@ -181,14 +180,18 @@ colorParser = do
     return $ Color (fromIntegral r) (fromIntegral g) (fromIntegral b)
 
 toGdkColor :: MonadIO m => Color -> m Gdk.Color
-toGdkColor (Color r g b) =
-    new Gdk.Color [colorRed := r, colorGreen := g, colorBlue := b]
+toGdkColor (Color r g b) = do
+    c <- new Gdk.Color []
+    setColorRed   c r
+    setColorGreen c g
+    setColorBlue  c b
+    return c
 
 fromGdkColor :: MonadIO m => Gdk.Color -> m Color
 fromGdkColor c = do
-    r <- colorReadRed c
-    g <- colorReadGreen c
-    b <- colorReadBlue c
+    r <- getColorRed c
+    g <- getColorGreen c
+    b <- getColorBlue c
     return $ Color r g b
 
 emptyParser ::  CharParser () ()

@@ -108,7 +108,7 @@ import Data.GI.Gtk.ModelView.SeqStore
 import Data.GI.Gtk.ModelView.Types
        (treeSelectionGetSelectedRows', treePathGetIndices',
         treePathNewFromIndices', stringToTreePath)
-import GI.Gdk (keyvalName, eventKeyReadKeyval, EventScroll)
+import GI.Gdk (keyvalName, getEventKeyKeyval, EventScroll)
 import GI.GObject (objectNew, signalStopEmissionByName)
 import Text.PrinterParser (Color(..), toGdkColor, fromGdkColor)
 
@@ -620,7 +620,7 @@ staticListMultiEditor list showF parameters notifier = do
                         val <- seqStoreGetValue seqStore i
                         seqStoreSetValue seqStore i (not (fst val),snd val)
                     onWidgetKeyPressEvent listView $ \e -> do
-                        name <- eventKeyReadKeyval e >>= keyvalName
+                        name <- getEventKeyKeyval e >>= keyvalName
                         liftIO $
                             case name of
                                 Just "Return" -> do
