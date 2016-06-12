@@ -43,23 +43,15 @@ import GI.Cairo (RectangleInt(..), getRectangleIntWidth, getRectangleIntHeight, 
 #ifdef MIN_VERSION_GDK_3_18
 rectangle = Rectangle
 #else
-type Rectangle      = RectangleInt
-rectangle           = RectangleInt
-getRectangleWidth :: Rectangle -> IO Int32
+type Rectangle     = RectangleInt
+rectangle          = RectangleInt
 getRectangleWidth  = getRectangleIntWidth
-getRectangleHeight :: Rectangle -> IO Int32
 getRectangleHeight = getRectangleIntHeight
-getRectangleX :: Rectangle -> IO Int32
 getRectangleX      = getRectangleIntX
-getRectangleY :: Rectangle -> IO Int32
 getRectangleY      = getRectangleIntY
-setRectangleWidth :: Rectangle -> Int32 -> IO ()
 setRectangleWidth  = setRectangleIntWidth
-setRectangleHeight :: Rectangle -> Int32 -> IO ()
 setRectangleHeight = setRectangleIntHeight
-setRectangleX :: Rectangle -> Int32 -> IO ()
 setRectangleX      = setRectangleIntX
-setRectangleY :: Rectangle -> Int32 -> IO ()
 setRectangleY      = setRectangleIntY
 #endif
 
