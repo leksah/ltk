@@ -45,10 +45,12 @@ rectangle = Rectangle
 #else
 type Rectangle     = RectangleInt
 rectangle          = RectangleInt
+getRectangleWidth, getRectangleHeight, getRectangleX, getRectangleY :: MonadIO m => Rectangle -> m Int32
 getRectangleWidth  = getRectangleIntWidth
 getRectangleHeight = getRectangleIntHeight
 getRectangleX      = getRectangleIntX
 getRectangleY      = getRectangleIntY
+setRectangleWidth, setRectangleHeight, setRectangleX, setRectangleY :: MonadIO m => Rectangle -> Int32 -> m ()
 setRectangleWidth  = setRectangleIntWidth
 setRectangleHeight = setRectangleIntHeight
 setRectangleX      = setRectangleIntX
@@ -62,4 +64,4 @@ newRectangle x y width height = do
     setRectangleY      r y
     setRectangleWidth  r width
     setRectangleHeight r height
-    return r    
+    return r
