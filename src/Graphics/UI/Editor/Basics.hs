@@ -69,7 +69,6 @@ import Data.GI.Base.BasicTypes (GObject)
 import Data.GI.Base.Signals (SignalHandlerId)
 import Data.GI.Base.ManagedPtr (unsafeCastTo, castTo)
 import GI.Gtk.Objects.Button (onButtonClicked, Button(..))
-import GI.GObject.Objects.Object (ObjectK)
 import Control.Monad.IO.Class (MonadIO)
 
 fromString = Just . T.pack

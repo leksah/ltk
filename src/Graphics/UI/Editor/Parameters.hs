@@ -52,40 +52,40 @@ import Data.Maybe
 import Data.Text (Text)
 import qualified Data.List as List
 import GI.Gtk.Enums (ResponseType, ShadowType(..))
-import GI.Gtk.Objects.Box (boxPackStart, BoxK, boxPackEnd)
+import GI.Gtk.Objects.Box (boxPackStart, IsBox, boxPackEnd)
 import Control.Monad.IO.Class (MonadIO)
-import GI.Gtk.Objects.Widget (Widget(..), WidgetK)
+import GI.Gtk.Objects.Widget (Widget(..), IsWidget)
 import Data.Word (Word32)
 import Data.Int (Int32)
 import qualified Data.Text as T (Text)
 import GI.Gtk.Objects.Dialog
-       (dialogResponse, dialogSetDefaultResponse, DialogK, dialogRun,
+       (dialogResponse, dialogSetDefaultResponse, IsDialog, dialogRun,
         dialogAddButton)
 import GI.Gtk.Structs.TreePath
        (treePathNew, TreePath(..))
 
 data Packing = PackRepel | PackGrow | PackNatural deriving (Eq, Show)
 
-boxPackStart' :: (MonadIO m, BoxK a, WidgetK b) => a -> b -> Packing -> Word32 -> m ()
+boxPackStart' :: (MonadIO m, IsBox a, IsWidget b) => a -> b -> Packing -> Word32 -> m ()
 boxPackStart' a b PackRepel   = boxPackStart a b True  False
 boxPackStart' a b PackGrow    = boxPackStart a b True  True
 boxPackStart' a b PackNatural = boxPackStart a b False False
 
-boxPackEnd' :: (MonadIO m, BoxK a, WidgetK b) => a -> b -> Packing -> Word32 -> m ()
+boxPackEnd' :: (MonadIO m, IsBox a, IsWidget b) => a -> b -> Packing -> Word32 -> m ()
 boxPackEnd' a b PackRepel   = boxPackEnd a b True  False
 boxPackEnd' a b PackGrow    = boxPackEnd a b True  True
 boxPackEnd' a b PackNatural = boxPackEnd a b False False
 
-dialogAddButton' :: (MonadIO m, DialogK d) => d -> T.Text -> ResponseType -> m Widget
+dialogAddButton' :: (MonadIO m, IsDialog d) => d -> T.Text -> ResponseType -> m Widget
 dialogAddButton' d t r = dialogAddButton d t (fromIntegral $ fromEnum r)
 
-dialogSetDefaultResponse' :: (MonadIO m, DialogK d) => d -> ResponseType -> m ()
+dialogSetDefaultResponse' :: (MonadIO m, IsDialog d) => d -> ResponseType -> m ()
 dialogSetDefaultResponse' d r = dialogSetDefaultResponse d (fromIntegral $ fromEnum r)
 
-dialogResponse' :: (MonadIO m, DialogK d) => d -> ResponseType -> m ()
+dialogResponse' :: (MonadIO m, IsDialog d) => d -> ResponseType -> m ()
 dialogResponse' d r = dialogResponse d (fromIntegral $ fromEnum r)
 
-dialogRun' :: (Applicative m, MonadIO m, DialogK d) => d -> m ResponseType
+dialogRun' :: (Applicative m, MonadIO m, IsDialog d) => d -> m ResponseType
 dialogRun' d = toEnum . fromIntegral <$> dialogRun d
 
 --

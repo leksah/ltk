@@ -163,7 +163,7 @@ import GI.Gtk
         eventBoxSetVisibleWindow, eventBoxNew, miscSetPadding,
         miscSetAlignment, EventBox, notebookSetCurrentPage, widgetShowAll,
         notebookInsertPageMenu, widgetGetName, notebookGetNthPage,
-        notebookGetNPages, labelNew, Label, WidgetK, NotebookK,
+        notebookGetNPages, labelNew, Label, IsWidget, IsNotebook,
         widgetSetName)
 import GI.Gtk.Enums
        (WindowType(..), ResponseType(..), ButtonsType(..),
@@ -243,7 +243,7 @@ getPanes = do
     panes' <- getPanesSt
     return (mapMaybe (\ (PaneC p) -> cast p) (Map.elems panes'))
 
-notebookInsertOrdered :: PaneMonad alpha => (NotebookK self, WidgetK child)
+notebookInsertOrdered :: PaneMonad alpha => (IsNotebook self, IsWidget child)
     => self
     -> child        -- child - the Widget to use as the contents of the page.
     -> Text
@@ -356,7 +356,7 @@ groupLabel group = do
     return labelBox
 
 -- | Add the change mark or removes it
-markLabel :: (MonadIO m, WidgetK alpha, NotebookK beta) => beta -> alpha -> Bool -> m ()
+markLabel :: (MonadIO m, IsWidget alpha, IsNotebook beta) => beta -> alpha -> Bool -> m ()
 markLabel nb topWidget modified =
     nullToNothing (notebookGetTabLabel nb topWidget) >>= \case
         Nothing  -> return ()
@@ -998,7 +998,7 @@ bringPaneToFront pane = do
     setCurrentNotebookPages tv
 
 
-setCurrentNotebookPages :: (MonadIO m, WidgetK widget) => widget -> m ()
+setCurrentNotebookPages :: (MonadIO m, IsWidget widget) => widget -> m ()
 setCurrentNotebookPages widget = do
     mbParent <- nullToNothing $ widgetGetParent widget
     case mbParent of

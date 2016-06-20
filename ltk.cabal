@@ -51,12 +51,12 @@ library
         pretty >=1.0.1.0 && <1.2,
         transformers >=0.2.2.0 && <0.6,
         ghc -any,
-        haskell-gi-base >=0.17 && <0.18,
-        gi-glib >=2.0.2 && <2.1,
-        gi-gobject >=2.0.2 && <2.1,
-        gi-cairo >=1.0.2 && <1.1,
-        gi-gdk >=3.0.2 && <3.1,
-        gi-gtk >=3.0.2 && <3.1,
+        haskell-gi-base >=0.18 && <0.19,
+        gi-glib >=2.0.6 && <2.1,
+        gi-gobject >=2.0.6 && <2.1,
+        gi-cairo >=1.0.6 && <1.1,
+        gi-gdk >=3.0.6 && <3.1,
+        gi-gtk >=3.0.6 && <3.1,
         gi-gtk-hs >=0.3.0.0 && <0.4
     hs-source-dirs: src
 
