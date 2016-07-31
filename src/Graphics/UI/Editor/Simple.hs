@@ -63,7 +63,7 @@ import Control.Monad.IO.Class (MonadIO(..))
 import qualified Data.Text as T (strip, unpack, pack, empty)
 import Data.Monoid ((<>))
 import Data.Text (Text)
-import Data.GI.Base (new, GObject(..), unsafeCastTo, nullToNothing)
+import Data.GI.Base (new', GObject(..), unsafeCastTo, nullToNothing)
 import GI.Gtk
        (noAdjustment, setCellRendererToggleActive,
         RadioButton, pattern STOCK_CANCEL, pattern STOCK_OK,
@@ -76,7 +76,7 @@ import GI.Gtk
         FileChooserAction, treeSelectionSelectPath, onWidgetKeyPressEvent,
         onCellRendererToggleToggled, scrolledWindowSetMinContentHeight,
         setCellRendererToggleActivatable, cellRendererToggleNew,
-        treeSelectionUnselectAll,
+        treeSelectionUnselectAll, constructDialogUseHeaderBar,
         treeViewSetHeadersVisible, setCellRendererTextText,
         cellLayoutPackStart, treeViewAppendColumn, treeViewColumnNew,
         cellRendererTextNew, treeSelectionSetMode, treeViewGetSelection,
@@ -754,7 +754,7 @@ fileEditor mbFilePath action buttonName parameters notifier = do
     where
     buttonHandler entry e =  do
         mbFileName <- do
-            dialog <- new FileChooserDialog []
+            dialog <- new' FileChooserDialog [constructDialogUseHeaderBar 1]
             setWindowTitle dialog "Select File"
             dialogAddButton dialog "gtk-cancel" (fromIntegral $ fromEnum ResponseTypeCancel)
             dialogAddButton dialog "gtk-open" (fromIntegral $ fromEnum ResponseTypeAccept)

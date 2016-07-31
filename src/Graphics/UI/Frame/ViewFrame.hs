@@ -639,7 +639,7 @@ viewNewGroup = do
             if groupName `Set.member` allGroupNames layout
                 then do
                     md <- new' MessageDialog [
-                        constructDialogUseHeaderBar 0,
+                        constructDialogUseHeaderBar 1,
                         constructMessageDialogButtons ButtonsTypeClose]
                     setMessageDialogMessageType md MessageTypeWarning
                     setMessageDialogText md $ "Group name not unique " <> groupName
@@ -746,7 +746,7 @@ closeGroup groupName = do
             continue <- case nameAndpathList of
                             (_:_) -> do
                                 md <- new' MessageDialog [
-                                    constructDialogUseHeaderBar 0,
+                                    constructDialogUseHeaderBar 1,
                                     constructMessageDialogButtons ButtonsTypeYesNo]
                                 setMessageDialogMessageType md MessageTypeQuestion
                                 setMessageDialogText md $ "Group " <> groupName <> " not empty. Close with all contents?"
