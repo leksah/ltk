@@ -114,7 +114,7 @@ import System.CPUTime (getCPUTime)
 import MyMissing (forceJust, forceHead)
 import Graphics.UI.Editor.MakeEditor
     (mkField, FieldDescription(..), buildEditor)
-import Graphics.UI.Editor.Simple (stringEditor, textEditor, okCancelFields)
+import Graphics.UI.Editor.Simple (stringEditor, textEditor)
 import Control.Event (registerEvent)
 import Graphics.UI.Editor.Basics
     (eventText, GUIEventSelector(..))
@@ -137,8 +137,8 @@ import GI.Gtk
         widgetSetSizeRequest, notebookNew, windowPresent, getWidgetVisible,
         notebookRemovePage, Window(..), widgetGetToplevel,
         onWidgetDeleteEvent, widgetGetAllocation, windowSetDefaultSize,
-        setWidgetName, windowNew, Widget(..), dialogResponse, HBox(..),
-        dialogGetActionArea, VBox(..), dialogGetContentArea,
+        setWidgetName, windowNew, Widget(..), dialogResponse,
+        dialogGetContentArea,
         setWindowTitle, setWindowTransientFor, dialogNew, Window,
         windowSetTransientFor, setMessageDialogText,
         constructDialogUseHeaderBar, MessageDialog(..), widgetDestroy,
@@ -185,7 +185,7 @@ import Data.Function (on)
 import Data.Coerce (coerce)
 import Foreign.ForeignPtr (ForeignPtr)
 import Data.GI.Gtk.ModelView.Types (equalManagedPtr)
-import GI.Gtk.Objects.Dialog (constructDialogUseHeaderBar)
+import GI.Gtk.Objects.Dialog (Dialog(..), constructDialogUseHeaderBar)
 import GI.Gtk.Objects.MessageDialog
        (constructMessageDialogButtons, setMessageDialogMessageType)
 import GI.Gtk.Objects.Label (noLabel)
@@ -676,20 +676,13 @@ bringGroupToFront groupName = do
 
 groupNameDialog :: (Applicative m, MonadIO m) => Window -> m (Maybe Text)
 groupNameDialog parent = do
-    dia                        <-   dialogNew
+    dia                        <-   new' Dialog [constructDialogUseHeaderBar 1]
     setWindowTransientFor dia parent
-    setWindowTitle dia "Enter group name"
-    upper                      <-   dialogGetContentArea dia >>= liftIO . unsafeCastTo VBox
-    lower                      <-   dialogGetActionArea dia >>= liftIO . unsafeCastTo HBox
-    (widget,inj,ext,_)         <-   buildEditor moduleFields ""
-    (widget2,_,_,notifier)     <-   buildEditor okCancelFields ()
-    liftIO $ registerEvent notifier ButtonPressed (\e -> do
-            case eventText e of
-                "Ok"    ->  dialogResponse dia (fromIntegral $ fromEnum ResponseTypeOk)
-                _       ->  dialogResponse dia (fromIntegral $ fromEnum ResponseTypeCancel)
-            return e)
+    setWindowTitle dia "Group"
+    upper                      <-   dialogGetContentArea dia >>= liftIO . unsafeCastTo Box
+    (widget,inj,ext,_)         <-   buildEditor fields ""
+    okButton <- dialogAddButton' dia "New" ResponseTypeOk
     boxPackStart upper widget True True 7
-    boxPackStart lower widget2 False False 7
     widgetShowAll dia
     resp  <- dialogRun dia
     value <- liftIO $ ext ""
@@ -698,10 +691,10 @@ groupNameDialog parent = do
         ResponseTypeOk | value /= Just "" -> return value
         _                                 -> return Nothing
   where
-        moduleFields :: FieldDescription Text
-        moduleFields = VFD emptyParams [
+        fields :: FieldDescription Text
+        fields = VFD emptyParams [
                 mkField
-                    (paraName <<<- ParaName "New group "
+                    (paraName <<<- ParaName "Group name "
                             $ emptyParams)
                     id
                     const

@@ -80,7 +80,7 @@ import GI.Gtk
         treeViewSetHeadersVisible, setCellRendererTextText,
         cellLayoutPackStart, treeViewAppendColumn, treeViewColumnNew,
         cellRendererTextNew, treeSelectionSetMode, treeViewGetSelection,
-        treeViewNewWithModel, Entry(..), binGetChild, comboBoxNewWithEntry,
+        treeViewNewWithModel, Entry(..), binGetChild, comboBoxTextNewWithEntry,
         comboBoxGetActive, comboBoxSetActive, ComboBox(..),
         onComboBoxChanged, widgetSetSizeRequest, spinButtonGetValue,
         spinButtonSetValue, SpinButton(..), afterSpinButtonChangeValue,
@@ -93,7 +93,7 @@ import GI.Gtk
         boxPackStart, radioButtonNewWithLabelFromWidget,
         radioButtonNewWithLabel, vBoxNew, toggleButtonGetActive, toWidget,
         toggleButtonSetActive, setWidgetName, checkButtonNewWithLabel,
-        containerAdd, onWidgetScrollEvent)
+        containerAdd, onWidgetScrollEvent, comboBoxTextAppendText)
 import GI.Gtk.Enums
        (ResponseType(..), SelectionMode(..), PolicyType(..), IconSize(..))
 import Data.GI.Gtk.ComboBox
@@ -493,17 +493,15 @@ comboEntryEditor list parameters notifier = do
             core <- readIORef coreRef
             case core of
                 Nothing  -> do
-                    combo <- comboBoxNewWithEntry
-                    comboBoxSetModelText combo
+                    combo <- comboBoxTextNewWithEntry
                     widgetSetSizeRequest combo 200 (-1)
-                    mapM_ (comboBoxAppendText combo) list
+                    mapM_ (comboBoxTextAppendText combo) list
                     widgetSetName combo (getParameter paraName parameters)
                     mapM_ (activateEvent combo notifier Nothing) genericGUIEvents
                     activateEvent combo notifier
                         (Just (\ w h -> do
                             res     <-  onComboBoxChanged w (void h)
                             return (unsafeCoerce res))) MayHaveChanged
-                    comboBoxSetActive combo 1
                     containerAdd widget combo
                     let ind = elemIndex obj list
                     case ind of
