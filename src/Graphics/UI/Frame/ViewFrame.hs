@@ -639,7 +639,7 @@ viewNewGroup = do
             if groupName `Set.member` allGroupNames layout
                 then do
                     md <- new' MessageDialog [
-                        constructDialogUseHeaderBar 1,
+                        constructDialogUseHeaderBar 0,
                         constructMessageDialogButtons ButtonsTypeClose]
                     setMessageDialogMessageType md MessageTypeWarning
                     setMessageDialogText md $ "Group name not unique " <> groupName
@@ -676,7 +676,7 @@ bringGroupToFront groupName = do
 
 groupNameDialog :: (Applicative m, MonadIO m) => Window -> m (Maybe Text)
 groupNameDialog parent = do
-    dia                        <-   new' Dialog [constructDialogUseHeaderBar 1]
+    dia                        <-   new' Dialog [constructDialogUseHeaderBar 0]
     setWindowTransientFor dia parent
     setWindowTitle dia "Group"
     upper                      <-   dialogGetContentArea dia >>= liftIO . unsafeCastTo Box
@@ -739,7 +739,7 @@ closeGroup groupName = do
             continue <- case nameAndpathList of
                             (_:_) -> do
                                 md <- new' MessageDialog [
-                                    constructDialogUseHeaderBar 1,
+                                    constructDialogUseHeaderBar 0,
                                     constructMessageDialogButtons ButtonsTypeYesNo]
                                 setMessageDialogMessageType md MessageTypeQuestion
                                 setMessageDialogText md $ "Group " <> groupName <> " not empty. Close with all contents?"
