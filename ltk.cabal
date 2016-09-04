@@ -63,3 +63,5 @@ library
     if flag(gdk-318)
         pkgconfig-depends: gdk-3.0 >= 3.18
         cpp-options:       -DMIN_VERSION_GDK_3_18
+    else
+        pkgconfig-depends: gdk-3.0 < 3.18
