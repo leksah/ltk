@@ -106,7 +106,10 @@ class (Typeable alpha, PaneMonad delta) =>  Pane alpha delta | alpha -> delta  w
     paneName        ::   alpha -> PaneName
     paneName b      =   if getAddedIndex b == 0
                             then primPaneName b
-                            else primPaneName b <> "(" <> T.pack (show $ getAddedIndex b) <> ")"
+                            else primPaneName b <> " (" <> T.pack (show $ getAddedIndex b) <> ")"
+
+    paneTooltipText :: alpha -> Maybe Text
+    paneTooltipText p = Nothing
 
     getAddedIndex   ::   alpha -> Int
     getAddedIndex _ =   0

@@ -189,6 +189,7 @@ import GI.Gtk.Objects.Dialog (Dialog(..), constructDialogUseHeaderBar)
 import GI.Gtk.Objects.MessageDialog
        (constructMessageDialogButtons, setMessageDialogMessageType)
 import GI.Gtk.Objects.Label (noLabel)
+import GI.Gtk.Objects.Widget (widgetSetTooltipText)
 
 -- import Debug.Trace (trace)
 trace (a::String) b = b
@@ -248,9 +249,10 @@ notebookInsertOrdered :: PaneMonad alpha => (IsNotebook self, IsWidget child)
     -> child        -- child - the Widget to use as the contents of the page.
     -> Text
     -> Maybe Label  -- the label for the page as Text or Label
+    -> Maybe Text   -- ^ Text for tooltip when hovering
     -> Bool
     -> alpha ()
-notebookInsertOrdered nb widget labelStr mbLabel isGroup = do
+notebookInsertOrdered nb widget labelStr mbLabel mbTooltipText isGroup = do
     label       <-  case mbLabel of
                         Nothing -> labelNew (Just labelStr)
                         Just l  -> return l
@@ -266,6 +268,7 @@ notebookInsertOrdered nb widget labelStr mbLabel isGroup = do
     labelBox    <-  if isGroup then groupLabel labelStr else mkLabelBox label labelStr
     markLabel nb labelBox False
     realPos     <-  notebookInsertPageMenu nb widget (Just labelBox) (Just menuLabel) (fromIntegral pos)
+    widgetSetTooltipText labelBox mbTooltipText
     widgetShowAll labelBox
     notebookSetCurrentPage nb realPos
 
@@ -717,7 +720,7 @@ viewNest' panePath group = do
         TerminalP {} -> do
             nb <- newNotebook (panePath ++ [GroupP group])
             widgetSetName nb (groupPrefix <> group)
-            notebookInsertOrdered activeNotebook nb group noLabel True
+            notebookInsertOrdered activeNotebook nb group noLabel Nothing True
             widgetShowAll nb
                 --widgetGrabFocus activeNotebook
             handleFunc <-  runInIO (handleNotebookSwitch nb)
@@ -937,7 +940,7 @@ move' (paneName,toNB) = do
                                     else do
                                         notebookRemovePage fromNB num
                                         label <- groupLabel group
-                                        notebookInsertOrdered toNB groupNBOrPaned group noLabel True
+                                        notebookInsertOrdered toNB groupNBOrPaned group noLabel Nothing True
                                         notebookSetTabLabel toNB groupNBOrPaned (Just label)
                                         adjustPanes fromPath (toPath ++ [GroupP group])
                                         adjustLayoutForGroupMove fromPath toPath group
@@ -964,7 +967,7 @@ move' (paneName,toNB) = do
                                             then trace "ViewFrame>>move': widget not found" return ()
                                             else do
                                                 notebookRemovePage fromNB num
-                                                notebookInsertOrdered toNB child paneName noLabel False
+                                                notebookInsertOrdered toNB child paneName noLabel (paneTooltipText pane) False
                                                 let paneMap1    =   Map.delete paneName paneMap
                                                 setPaneMapSt    $   Map.insert paneName (toPath,cid) paneMap1
 
