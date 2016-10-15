@@ -25,6 +25,9 @@ flag gdk-318
         GDK is 3.18 or later
 
 library
+    if !impl(ghcjs)
+        build-depends:
+            ghc -any
     exposed-modules:
         Default
         Control.Event
@@ -50,7 +53,6 @@ library
         parsec >=2.1.0.1 && <3.2,
         pretty >=1.0.1.0 && <1.2,
         transformers >=0.2.2.0 && <0.6,
-        ghc -any,
         haskell-gi-base >=0.18 && <0.19,
         gi-glib >=2.0.6 && <2.1,
         gi-gobject >=2.0.6 && <2.1,
