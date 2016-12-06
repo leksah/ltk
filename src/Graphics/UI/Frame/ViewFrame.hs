@@ -121,7 +121,7 @@ import Graphics.UI.Editor.Basics
 import qualified Data.Set as  Set (unions, member)
 import Data.Set (Set(..))
 import Control.Monad.IO.Class (MonadIO(..))
-import Control.Monad (when, liftM, foldM)
+import Control.Monad (unless, when, liftM, foldM)
 import Control.Applicative ((<$>))
 import qualified Control.Monad.Reader as Gtk (liftIO)
 import qualified Data.Text as T (pack, stripPrefix, unpack)
@@ -176,14 +176,13 @@ import GI.Gdk
 import Graphics.UI.Frame.Rectangle (getRectangleWidth, getRectangleHeight)
 import Data.GI.Base
        (unsafeManagedPtrCastPtr, withManagedPtr, castTo, unsafeCastTo,
-        ForeignPtrNewtype, UnexpectedNullPointerReturn(..), GObject(..),
+        ManagedPtrNewtype, UnexpectedNullPointerReturn(..), GObject(..),
         new', nullToNothing)
 import Control.Exception (catch)
 import Data.Int (Int32)
 import Data.Word (Word32)
 import Data.Function (on)
 import Data.Coerce (coerce)
-import Foreign.ForeignPtr (ForeignPtr)
 import Data.GI.Gtk.ModelView.Types (equalManagedPtr)
 import GI.Gtk.Objects.Dialog (Dialog(..), constructDialogUseHeaderBar)
 import GI.Gtk.Objects.MessageDialog
@@ -485,7 +484,8 @@ viewSplit' panePath dir = do
                                                         panePath ++ [SplitP RightP])
             adjustNotebooks panePath oldPath
             frameState  <- getFrameState
-            setPanePathFromNB $ Map.insert (unsafeManagedPtrCastPtr activeNotebook) oldPath (panePathFromNB frameState)
+            notebookPtr <- liftIO $ unsafeManagedPtrCastPtr activeNotebook
+            setPanePathFromNB $ Map.insert notebookPtr oldPath (panePathFromNB frameState)
             nb  <- newNotebook newPath
             newpane <- case dir of
                           Horizontal  -> vPanedNew >>= liftIO . toPaned
@@ -584,7 +584,8 @@ viewCollapse' panePath = trace "viewCollapse' called" $ do
                             mapM_ (\n -> move' (n,activeNotebook)) groupNames
                             -- 2. Remove unused notebook from admin
                             st <- getFrameState
-                            let ! newMap = Map.delete (unsafeManagedPtrCastPtr otherSideNotebook) (panePathFromNB st)
+                            notebookPtr <- liftIO $ unsafeManagedPtrCastPtr otherSideNotebook
+                            let ! newMap = Map.delete notebookPtr (panePathFromNB st)
                             setPanePathFromNB newMap
                             -- 3. Remove one level and reparent notebook
                             parent <- nullToNothing (widgetGetParent activeNotebook) >>= liftIO . unsafeCastTo Container . fromJust
@@ -930,7 +931,8 @@ move' (paneName,toNB) = do
                 Just fromPath -> do
                     groupNBOrPaned <- getNotebookOrPaned fromPath return
                     fromNB  <- getNotebook' "move'" (init fromPath)
-                    case unsafeManagedPtrCastPtr toNB `Map.lookup` panePathFromNB frameState of
+                    toNBPtr <- liftIO $ unsafeManagedPtrCastPtr toNB
+                    case toNBPtr `Map.lookup` panePathFromNB frameState of
                         Nothing -> trace "ViewFrame>>move': panepath for Notebook not found1" return ()
                         Just toPath ->
                             when (not (fromNB `equalManagedPtr` toNB || fromPath `isPrefixOf` toPath)) $ do
@@ -950,8 +952,9 @@ move' (paneName,toNB) = do
         Nothing     ->
             case paneName `Map.lookup` panes of
                 Nothing -> trace ("ViewFrame>>move': pane not found: " <> T.unpack paneName) return ()
-                Just (PaneC pane) ->
-                    case unsafeManagedPtrCastPtr toNB `Map.lookup` panePathFromNB frameState of
+                Just (PaneC pane) -> do
+                    toNBPtr <- liftIO $ unsafeManagedPtrCastPtr toNB
+                    case toNBPtr `Map.lookup` panePathFromNB frameState of
                         Nothing -> trace "ViewFrame>>move': panepath for Notebook not found2" return ()
                         Just toPath ->
                             case paneName `Map.lookup`paneMap of
@@ -961,7 +964,7 @@ move' (paneName,toNB) = do
                                     child           <-  getTopWidget pane
                                     (fromPane,cid)  <-  guiPropertiesFromName paneName
                                     fromNB          <-  getNotebook' "move'" fromPane
-                                    when (not (fromNB `equalManagedPtr` toNB)) $ do
+                                    unless (fromNB `equalManagedPtr` toNB) $ do
                                         num <- notebookPageNum fromNB child
                                         if num < 0
                                             then trace "ViewFrame>>move': widget not found" return ()
@@ -1054,7 +1057,8 @@ newNotebook :: PaneMonad alpha => PanePath -> alpha Notebook
 newNotebook pp = do
     st  <- getFrameState
     nb  <- liftIO newNotebook'
-    setPanePathFromNB $ Map.insert (unsafeManagedPtrCastPtr nb) pp (panePathFromNB st)
+    nbPtr <- liftIO $ unsafeManagedPtrCastPtr nb
+    setPanePathFromNB $ Map.insert nbPtr pp (panePathFromNB st)
     func <- runInIO move'
     tl <- targetListNew Nothing
     targetListAddTextTargets tl 0
