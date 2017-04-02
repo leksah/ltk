@@ -265,7 +265,6 @@ notebookInsertOrdered nb widget labelStr mbLabel mbTooltipText isGroup = do
                          (\ s -> withoutGroupPrefix s > withoutGroupPrefix labelStr)
                          labelStrs)
     labelBox    <-  if isGroup then groupLabel labelStr else mkLabelBox label labelStr
-    markLabel nb labelBox False
     realPos     <-  notebookInsertPageMenu nb widget (Just labelBox) (Just menuLabel) (fromIntegral pos)
     widgetSetTooltipText labelBox mbTooltipText
     widgetShowAll labelBox
@@ -296,11 +295,6 @@ mkLabelBox lbl paneName = do
     provider <- cssProviderNew
     cssProviderLoadFromData provider (
         ".button {\n" <>
-        "-GtkButton-default-border : 0px;\n" <>
-        "-GtkButton-default-outside-border : 0px;\n" <>
-        "-GtkButton-inner-border: 0px;\n" <>
-        "-GtkWidget-focus-line-width : 0px;\n" <>
-        "-GtkWidget-focus-padding : 0px;\n" <>
         "padding: 0px;\n" <>
         "border-width: 0px;\n" <>
         "}\n" <>
