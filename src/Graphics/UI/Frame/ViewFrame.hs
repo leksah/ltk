@@ -257,7 +257,7 @@ notebookInsertOrdered nb widget labelStr mbLabel mbTooltipText isGroup = do
                         Just l  -> return l
     menuLabel   <-  labelNew (Just labelStr)
     numPages    <-  notebookGetNPages nb
-    mbWidgets   <-  mapM (nullToNothing . notebookGetNthPage nb) [0 .. (numPages-1)]
+    mbWidgets   <-  mapM (notebookGetNthPage nb) [0 .. (numPages-1)]
     let widgets =   map (`forceJust` "ViewFrame.notebookInsertOrdered: no widget") mbWidgets
     labelStrs   <-  mapM widgetGetName widgets
     let pos     =   fromMaybe (-1)
@@ -287,7 +287,7 @@ mkLabelBox lbl paneName = do
     buttonSetAlignment tabButton 0.0 0.0
 
     iconTheme <- iconThemeGetDefault
-    mbIcon <- nullToNothing $ iconThemeLoadIcon iconTheme "window-close" 10 [IconLookupFlagsUseBuiltin]
+    mbIcon <- iconThemeLoadIcon iconTheme "window-close" 10 [IconLookupFlagsUseBuiltin]
     image <- case mbIcon of
                 Just i  -> imageNewFromPixbuf (Just i)
                 Nothing -> imageNewFromStock STOCK_CLOSE (fromIntegral $ fromEnum IconSizeMenu)
@@ -463,7 +463,7 @@ viewSplit' panePath dir = do
         _                            -> do
             activeNotebook  <- getNotebook' "viewSplit" panePath
             ind <- notebookGetCurrentPage activeNotebook
-            parent <- nullToNothing (widgetGetParent activeNotebook) >>= liftIO . unsafeCastTo Container . fromJust
+            parent <- widgetGetParent activeNotebook >>= liftIO . unsafeCastTo Container . fromJust
             let (name,altname,paneDir,
                  oldPath,newPath) =  case dir of
                                         Horizontal  -> ("top",
@@ -523,7 +523,7 @@ viewSplit' panePath dir = do
             afterNotebookSwitchPage nb (\w i -> handleFunc $ fromIntegral i)
             adjustPanes panePath (panePath ++ [SplitP paneDir])
             adjustLayoutForSplit paneDir panePath
-            nullToNothing (notebookGetNthPage activeNotebook ind) >>= \case
+            notebookGetNthPage activeNotebook ind >>= \case
                 Nothing -> return ()
                 Just widget -> do
                     name <- widgetGetName widget
@@ -582,8 +582,8 @@ viewCollapse' panePath = trace "viewCollapse' called" $ do
                             let ! newMap = Map.delete notebookPtr (panePathFromNB st)
                             setPanePathFromNB newMap
                             -- 3. Remove one level and reparent notebook
-                            parent <- nullToNothing (widgetGetParent activeNotebook) >>= liftIO . unsafeCastTo Container . fromJust
-                            grandparent <- nullToNothing (widgetGetParent parent) >>= liftIO . unsafeCastTo Container . fromJust
+                            parent <- widgetGetParent activeNotebook >>= liftIO . unsafeCastTo Container . fromJust
+                            grandparent <- widgetGetParent parent >>= liftIO . unsafeCastTo Container . fromJust
                             nbIndex <- liftIO $ castTo Notebook grandparent >>= \case
                                             Just notebook -> notebookPageNum notebook parent
                                             Nothing -> return (-1)
@@ -753,7 +753,7 @@ closeGroup groupName = do
                 results <- mapM (\ (PaneC p) -> closePane p) panes
                 when (and results) $ do
                     nbOrPaned  <- getNotebookOrPaned path return
-                    parent <- nullToNothing (widgetGetParent nbOrPaned) >>= liftIO. unsafeCastTo Container . fromJust
+                    parent <- widgetGetParent nbOrPaned >>= liftIO. unsafeCastTo Container . fromJust
                     containerRemove parent nbOrPaned
                     setLayoutSt (removeGL path layout)
                     ppMap <- getPanePathFromNB
@@ -770,7 +770,7 @@ viewDetach = do
 viewDetach' :: PaneMonad alpha => PanePath -> Text -> alpha (Maybe (Window, Notebook))
 viewDetach' panePath id = do
     activeNotebook  <- getNotebook' "viewDetach'" panePath
-    parent <- nullToNothing (widgetGetParent activeNotebook) >>= liftIO . unsafeCastTo Container . fromJust
+    parent <- widgetGetParent activeNotebook >>= liftIO . unsafeCastTo Container . fromJust
     layout          <-  getLayoutSt
     let paneLayout  =   layoutFromPath panePath layout
     case paneLayout of
@@ -843,7 +843,7 @@ groupMenuLabel group = liftM Just (labelNew (Just group))
 
 handleNotebookSwitch :: PaneMonad beta => Notebook -> Int -> beta ()
 handleNotebookSwitch nb index =
-    nullToNothing (notebookGetNthPage nb (fromIntegral index)) >>= \case
+    notebookGetNthPage nb (fromIntegral index) >>= \case
         Nothing -> error "ViewFrame/handleNotebookSwitch: Can't find widget"
         Just w  -> do
             name   <- widgetGetName w
@@ -993,7 +993,7 @@ bringPaneToFront pane = do
 
 setCurrentNotebookPages :: (MonadIO m, IsWidget widget) => widget -> m ()
 setCurrentNotebookPages widget = do
-    mbParent <- nullToNothing $ widgetGetParent widget
+    mbParent <- widgetGetParent widget
     case mbParent of
         Just parent -> do
             setCurrentNotebookPages parent

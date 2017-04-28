@@ -63,7 +63,7 @@ import Control.Monad.IO.Class (MonadIO(..))
 import qualified Data.Text as T (strip, unpack, pack, empty)
 import Data.Monoid ((<>))
 import Data.Text (Text)
-import Data.GI.Base (new', GObject(..), unsafeCastTo, nullToNothing)
+import Data.GI.Base (new', GObject(..), unsafeCastTo)
 import GI.Gtk
        (noAdjustment, setCellRendererToggleActive,
         RadioButton, pattern STOCK_CANCEL, pattern STOCK_OK,
@@ -761,7 +761,7 @@ fileEditor mbFilePath action buttonName parameters notifier = do
             response <- dialogRun dialog
             case toEnum $ fromIntegral response of
                 ResponseTypeAccept -> do
-                    f <- nullToNothing $ fileChooserGetFilename dialog
+                    f <- fileChooserGetFilename dialog
                     widgetDestroy dialog
                     return f
                 ResponseTypeCancel -> do
