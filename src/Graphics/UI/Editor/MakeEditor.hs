@@ -42,7 +42,7 @@ import Graphics.UI.Utils
 import Graphics.UI.Editor.Parameters
 import Graphics.UI.Editor.Basics
 --import Graphics.UI.Frame.ViewFrame
-import Data.Maybe (fromMaybe, isNothing)
+import Data.Maybe (fromMaybe, isNothing, fromJust)
 import Data.IORef (newIORef)
 import GI.Gtk.Objects.Widget
        (toWidget, widgetSetName, widgetSetSizeRequest, Widget(..))
@@ -82,7 +82,7 @@ import GI.Gtk.Objects.Adjustment (noAdjustment)
 import Data.GI.Gtk.ModelView.SeqStore (SeqStore(..), seqStoreNew)
 import GI.Gtk.Objects.Label (labelNew)
 import Control.Exception (catch)
-import Data.GI.Base.BasicTypes (UnexpectedNullPointerReturn(..))
+import Data.GI.Base.BasicTypes (UnexpectedNullPointerReturn(..), nullToNothing)
 import GI.Gtk.Structs.TreePath (treePathNewFirst)
 import Data.GI.Gtk.ModelView.Types
        (treeSelectionGetSelectedRows', treePathGetIndices')
@@ -296,12 +296,12 @@ getRealWidget w = liftIO $ (
     castTo Bin w >>= \case
         Nothing -> return Nothing
         Just b  ->
-            binGetChild b >>= castTo Bin >>= \case
+            (fromJust <$> nullToNothing (binGetChild b)) >>= castTo Bin >>= \case
                 Nothing -> return Nothing
                 Just f  ->
-                    binGetChild f >>= castTo Bin >>= \case
+                    (fromJust <$> nullToNothing (binGetChild f)) >>= castTo Bin >>= \case
                         Nothing -> return Nothing
-                        Just ia -> Just <$> binGetChild ia
+                        Just ia -> nullToNothing (binGetChild ia)
   ) `catch` (\UnexpectedNullPointerReturn {} -> return Nothing)
 
 

@@ -64,7 +64,7 @@ import Control.Monad.IO.Class (MonadIO(..))
 import qualified Data.Text as T (strip, unpack, pack, empty)
 import Data.Monoid ((<>))
 import Data.Text (Text)
-import Data.GI.Base (new', GObject(..), unsafeCastTo)
+import Data.GI.Base (new', GObject(..), unsafeCastTo, nullToNothing)
 import GI.Gtk
        (orientableSetOrientation, colorChooserGetRgba,
         colorChooserSetRgba, widgetSetHalign, imageSetFromIconName,
@@ -512,7 +512,7 @@ comboEntryEditor list parameters notifier = do
                     case ind of
                         Just i -> comboBoxSetActive combo (fromIntegral i)
                         Nothing -> do
-                            entry <- binGetChild combo >>= unsafeCastTo Entry
+                            entry <- (fromJust <$> nullToNothing (binGetChild combo)) >>= unsafeCastTo Entry
                             entrySetText entry obj
                     writeIORef coreRef (Just combo)
                 Just combo -> do
@@ -524,7 +524,7 @@ comboEntryEditor list parameters notifier = do
             case core of
                 Nothing -> return Nothing
                 Just combo -> do
-                    entry <- binGetChild combo >>= unsafeCastTo Entry
+                    entry <- (fromJust <$> nullToNothing (binGetChild combo)) >>= unsafeCastTo Entry
                     Just <$> entryGetText entry)
         parameters
         notifier
