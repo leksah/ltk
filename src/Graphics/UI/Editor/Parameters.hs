@@ -18,16 +18,13 @@ module Graphics.UI.Editor.Parameters (
 ,   Parameter(..)
 ,   paraName
 ,   paraSynopsis
-,   paraDirection
+,   paraOrientation
 ,   paraShowLabel
 ,   paraShadow
-,   paraOuterAlignment
-,   paraInnerAlignment
-,   paraOuterPadding
-,   paraInnerPadding
+,   paraMargin
 ,   paraMinSize
-,   paraHorizontal
-,   paraStockId
+,   paraHAlign
+,   paraVAlign
 ,   paraMultiSel
 ,   paraPack
 
@@ -42,8 +39,6 @@ module Graphics.UI.Editor.Parameters (
 ,   dialogSetDefaultResponse'
 ,   dialogResponse'
 ,   dialogRun'
-,   Direction(..)
-,   HorizontalAlign(..)
 ) where
 
 import Prelude ()
@@ -51,7 +46,7 @@ import Prelude.Compat
 import Data.Maybe
 import Data.Text (Text)
 import qualified Data.List as List
-import GI.Gtk.Enums (ResponseType, ShadowType(..))
+import GI.Gtk.Enums (Orientation(..), ResponseType, ShadowType(..))
 import GI.Gtk.Objects.Box (boxPackStart, IsBox, boxPackEnd)
 import Control.Monad.IO.Class (MonadIO)
 import GI.Gtk.Objects.Widget (Widget(..), IsWidget)
@@ -63,6 +58,7 @@ import GI.Gtk.Objects.Dialog
         dialogAddButton)
 import GI.Gtk.Structs.TreePath
        (treePathNew, TreePath(..))
+import GI.Gtk (Orientation(..), Align(..))
 
 data Packing = PackRepel | PackGrow | PackNatural deriving (Eq, Show)
 
@@ -88,12 +84,6 @@ dialogResponse' d r = dialogResponse d (fromIntegral $ fromEnum r)
 dialogRun' :: (Applicative m, MonadIO m, IsDialog d) => d -> m ResponseType
 dialogRun' d = toEnum . fromIntegral <$> dialogRun d
 
---
--- | The direction of a split
---
-data Direction      =   Horizontal | Vertical
-    deriving (Eq,Show)
-
 data HorizontalAlign =   StartHorizontal | StopHorizontal | Keep
     deriving (Eq,Show)
 --
@@ -103,20 +93,14 @@ type Parameters     =   [Parameter]
 
 data Parameter      =   ParaName Text
                     |   ParaSynopsis Text
-                    |   ParaDirection Direction
+                    |   ParaOrientation Orientation
                     |   ParaShadow ShadowType
                     |   ParaShowLabel Bool
-                    |   ParaOuterAlignment  (Float,Float,Float,Float)
-                                               -- | xalign yalign xscale yscale
-                    |   ParaOuterPadding    (Word32,Word32,Word32,Word32)
-                                                --  | paddingTop paddingBottom paddingLeft paddingRight
-                    |   ParaInnerAlignment  (Float,Float,Float,Float)
-                                                -- | xalign yalign xscale yscale
-                    |   ParaInnerPadding   (Word32,Word32,Word32,Word32)
-                                                --  | paddingTop paddingBottom paddingLeft paddingRight
-                    |   ParaMinSize         (Int32, Int32)
-                    |   ParaHorizontal      HorizontalAlign
-                    |   ParaStockId Text
+                    |   ParaMargin    (Int32,Int32,Int32,Int32)
+                                      -- ^ marginTop marginBottom marginLeft marginRight
+                    |   ParaMinSize    (Int32, Int32)
+                    |   ParaHAlign Align
+                    |   ParaVAlign Align
                     |   ParaMultiSel Bool
                     |   ParaPack Packing
     deriving (Eq,Show)
@@ -137,41 +121,29 @@ paraShowLabel                    ::   Parameter -> Maybe Bool
 paraShowLabel (ParaShowLabel b)  =   Just b
 paraShowLabel _                  =   Nothing
 
-paraDirection                   ::   Parameter -> Maybe Direction
-paraDirection (ParaDirection d) =   Just d
-paraDirection _                 =   Nothing
+paraOrientation                 ::   Parameter -> Maybe Orientation
+paraOrientation (ParaOrientation d) =   Just d
+paraOrientation _               =   Nothing
 
 paraShadow                      ::   Parameter -> Maybe ShadowType
 paraShadow (ParaShadow d)       =   Just d
 paraShadow _                    =   Nothing
 
-paraOuterAlignment              ::   Parameter -> Maybe (Float,Float,Float,Float)
-paraOuterAlignment (ParaOuterAlignment d) = Just d
-paraOuterAlignment _            =   Nothing
-
-paraInnerAlignment              ::   Parameter -> Maybe (Float,Float,Float,Float)
-paraInnerAlignment (ParaInnerAlignment d) = Just d
-paraInnerAlignment _            =   Nothing
-
-paraOuterPadding                ::   Parameter -> Maybe (Word32,Word32,Word32,Word32)
-paraOuterPadding (ParaOuterPadding d) = Just d
-paraOuterPadding _              =   Nothing
-
-paraInnerPadding                ::   Parameter -> Maybe (Word32,Word32,Word32,Word32)
-paraInnerPadding (ParaInnerPadding d) = Just d
-paraInnerPadding _              =   Nothing
+paraMargin                      ::   Parameter -> Maybe (Int32,Int32,Int32,Int32)
+paraMargin (ParaMargin d)       =   Just d
+paraMargin _                    =   Nothing
 
 paraMinSize                     ::   Parameter -> Maybe (Int32, Int32)
 paraMinSize (ParaMinSize d)     =   Just d
 paraMinSize _                   =   Nothing
 
-paraHorizontal                  ::   Parameter -> Maybe HorizontalAlign
-paraHorizontal (ParaHorizontal d) =   Just d
-paraHorizontal _                =   Nothing
+paraHAlign                      ::   Parameter -> Maybe Align
+paraHAlign (ParaHAlign d)       =   Just d
+paraHAlign _                    =   Nothing
 
-paraStockId                     ::   Parameter -> Maybe Text
-paraStockId (ParaStockId str)   =   Just str
-paraStockId _                   =   Nothing
+paraVAlign                      ::   Parameter -> Maybe Align
+paraVAlign (ParaVAlign d)       =   Just d
+paraVAlign _                    =   Nothing
 
 paraMultiSel                    ::   Parameter -> Maybe Bool
 paraMultiSel (ParaMultiSel b)   =   Just b
@@ -204,16 +176,13 @@ getParameterPrim selector parameter =
 defaultParameters :: Parameters
 defaultParameters =
     [   ParaName ""
-    ,   ParaStockId ""
     ,   ParaSynopsis ""
-    ,   ParaDirection Horizontal
+    ,   ParaOrientation OrientationHorizontal
     ,   ParaShadow ShadowTypeNone
-    ,   ParaOuterAlignment  (0.4, 0.5, 1.0, 0.7)
-    ,   ParaOuterPadding    (5, 5, 5, 5)
-    ,   ParaInnerAlignment  (0.4, 0.5, 1.0, 0.7)
-    ,   ParaInnerPadding    (5, 5, 5, 5)
-    ,   ParaMinSize         (-1,-1)
-    ,   ParaHorizontal      Keep
+    ,   ParaMargin  (5, 5, 5, 5)
+    ,   ParaMinSize (-1,-1)
+    ,   ParaHAlign  AlignFill
+    ,   ParaVAlign  AlignFill
     ,   ParaMultiSel True
     ,   ParaPack PackNatural
     ,   ParaShowLabel True

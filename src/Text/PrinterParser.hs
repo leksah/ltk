@@ -38,6 +38,8 @@ module Text.PrinterParser (
 ,   Color(..)
 ,   toGdkColor
 ,   fromGdkColor
+,   toGdkRGBA
+,   fromGdkRGBA
 ) where
 
 import Text.ParserCombinators.Parsec.Language
@@ -65,6 +67,9 @@ import Data.GI.Base.Constructible (Constructible(..))
 import GI.Gdk.Structs.Color
        (getColorBlue, getColorGreen, getColorRed, setColorBlue,
         setColorGreen, setColorRed)
+import GI.Gdk
+       (setRGBAAlpha, getRGBABlue, getRGBAGreen, getRGBARed, setRGBABlue,
+        setRGBAGreen, setRGBARed, newZeroRGBA, RGBA)
 
 type Printer beta       =   beta -> PP.Doc
 type Parser beta        =   CharParser () beta
@@ -193,6 +198,22 @@ fromGdkColor c = do
     g <- getColorGreen c
     b <- getColorBlue c
     return $ Color r g b
+
+toGdkRGBA :: MonadIO m => Color -> m RGBA
+toGdkRGBA (Color r g b) = do
+    c <- newZeroRGBA
+    setRGBARed   c (fromIntegral r / 65535)
+    setRGBAGreen c (fromIntegral g / 65535)
+    setRGBABlue  c (fromIntegral b / 65535)
+    setRGBAAlpha c 65535
+    return c
+
+fromGdkRGBA :: MonadIO m => RGBA -> m Color
+fromGdkRGBA c = do
+    r <- getRGBARed c
+    g <- getRGBAGreen c
+    b <- getRGBABlue c
+    return $ Color (round (r * 65535)) (round (g * 65535)) (round (b * 65535))
 
 emptyParser ::  CharParser () ()
 emptyParser = pzero

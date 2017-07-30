@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
@@ -129,18 +130,18 @@ import Data.Monoid ((<>))
 import Data.Foldable (forM_)
 import Control.Arrow (Arrow(..))
 import GI.Gtk
-       (noWidget, windowGetScreen, Bin(..), CssProvider(..),
-        uIManagerGetAction, Action, toWidget, selectionDataGetText,
-        SelectionData, WidgetDragDataReceivedCallback,
-        onWidgetDragDataReceived, widgetDragDestSetTargetList,
-        widgetDragDestSet, setNotebookEnablePopup, notebookSetScrollable,
+       (panedNew, gridNew, widgetSetValign, widgetSetHalign, noWidget,
+        windowGetScreen, Bin(..), CssProvider(..), uIManagerGetAction,
+        Action, toWidget, selectionDataGetText, SelectionData,
+        WidgetDragDataReceivedCallback, onWidgetDragDataReceived,
+        widgetDragDestSetTargetList, widgetDragDestSet,
+        setNotebookEnablePopup, notebookSetScrollable,
         widgetSetSizeRequest, notebookNew, windowPresent, getWidgetVisible,
         notebookRemovePage, Window(..), widgetGetToplevel,
         onWidgetDeleteEvent, widgetGetAllocation, windowSetDefaultSize,
         setWidgetName, windowNew, Widget(..), dialogResponse,
-        dialogGetContentArea,
-        setWindowTitle, setWindowTransientFor, dialogNew, Window,
-        windowSetTransientFor, setMessageDialogText,
+        dialogGetContentArea, setWindowTitle, setWindowTransientFor,
+        dialogNew, Window, windowSetTransientFor, setMessageDialogText,
         constructDialogUseHeaderBar, MessageDialog(..), widgetDestroy,
         dialogRun, afterNotebookSwitchPage, widgetGrabFocus,
         boxReorderChild, Box(..), notebookSetMenuLabel,
@@ -165,10 +166,15 @@ import GI.Gtk
         notebookInsertPageMenu, widgetGetName, notebookGetNthPage,
         notebookGetNPages, labelNew, Label, IsWidget, IsNotebook,
         widgetSetName)
+#ifdef MIN_VERSION_GTK_3_20
+import GI.Gtk.Objects.Widget (widgetSetFocusOnClick)
+#else
+import GI.Gtk.Objects.Button (buttonSetFocusOnClick)
+#endif
 import GI.Gtk.Enums
-       (WindowType(..), ResponseType(..), ButtonsType(..),
-        MessageType(..), PositionType(..), Align(..), IconSize(..),
-        ReliefStyle(..))
+       (Orientation(..), WindowType(..), ResponseType(..),
+        ButtonsType(..), MessageType(..), PositionType(..), Align(..),
+        IconSize(..), ReliefStyle(..))
 import GI.Gtk.Flags (DestDefaults(..), IconLookupFlags(..))
 import GI.Gdk.Flags (ModifierType(..), DragAction(..))
 import GI.Gdk
@@ -273,24 +279,26 @@ notebookInsertOrdered nb widget labelStr mbLabel mbTooltipText isGroup = do
 -- | Returns a label box
 mkLabelBox :: PaneMonad alpha => Label -> Text -> alpha EventBox
 mkLabelBox lbl paneName = do
-    miscSetAlignment lbl 0.0 0.0
-    miscSetPadding lbl 0 0
+    widgetSetHalign lbl AlignStart
+    widgetSetValign lbl AlignStart
 
     labelBox  <- eventBoxNew
     eventBoxSetVisibleWindow labelBox False
-    innerBox  <- hBoxNew False 0
+    innerBox  <- gridNew
 
     tabButton <- buttonNew
     widgetSetName tabButton "leksah-close-button"
+#ifdef MIN_VERSION_GTK_3_20
+    widgetSetFocusOnClick tabButton False
+#else
     buttonSetFocusOnClick tabButton False
+#endif
     buttonSetRelief tabButton ReliefStyleNone
-    buttonSetAlignment tabButton 0.0 0.0
+    widgetSetHalign tabButton AlignEnd
+    widgetSetValign tabButton AlignCenter
 
     iconTheme <- iconThemeGetDefault
-    mbIcon <- iconThemeLoadIcon iconTheme "window-close" 10 [IconLookupFlagsUseBuiltin]
-    image <- case mbIcon of
-                Just i  -> imageNewFromPixbuf (Just i)
-                Nothing -> imageNewFromStock STOCK_CLOSE (fromIntegral $ fromEnum IconSizeMenu)
+    image <- iconThemeLoadIcon iconTheme "window-close" 10 [IconLookupFlagsUseBuiltin] >>= imageNewFromPixbuf
 
     provider <- cssProviderNew
     cssProviderLoadFromData provider (
@@ -311,8 +319,8 @@ mkLabelBox lbl paneName = do
     containerSetBorderWidth tabButton 0
     containerAdd tabButton image
 
-    boxPackStart innerBox lbl       False False 0
-    boxPackStart innerBox tabButton False False 0
+    containerAdd innerBox lbl
+    containerAdd innerBox tabButton
 
     containerAdd labelBox innerBox
     setWidgetHalign innerBox AlignCenter
@@ -354,13 +362,13 @@ groupLabel group = do
 -- | Add the change mark or removes it
 markLabel :: (MonadIO m, IsWidget alpha, IsNotebook beta) => beta -> alpha -> Bool -> m ()
 markLabel nb topWidget modified =
-    nullToNothing (notebookGetTabLabel nb topWidget) >>= \case
+    notebookGetTabLabel nb topWidget >>= \case
         Nothing  -> return ()
         Just box -> liftIO (unsafeCastTo Bin box) >>= nullToNothing . binGetChild >>= \case
             Nothing -> return ()
             Just container -> do
                 children <- liftIO (unsafeCastTo Container container) >>= containerGetChildren
-                label <- liftIO . unsafeCastTo Label $ forceHead children "ViewFrame>>markLabel: empty children"
+                label <- liftIO . unsafeCastTo Label $ forceHead (tail children) "ViewFrame>>markLabel: empty children"
                 text <- widgetGetName topWidget
                 labelSetUseMarkup label True
                 labelSetMarkup label
@@ -437,26 +445,26 @@ viewTabsPos pos = do
 -- | Split the currently active pane in horizontal direction
 --
 viewSplitHorizontal     :: PaneMonad alpha => alpha ()
-viewSplitHorizontal     = viewSplit Horizontal
+viewSplitHorizontal     = viewSplit OrientationHorizontal
 
 --
 -- | Split the currently active pane in vertical direction
 --
 viewSplitVertical :: PaneMonad alpha => alpha ()
-viewSplitVertical = viewSplit Vertical
+viewSplitVertical = viewSplit OrientationVertical
 
 --
 -- | The active view can be split in two (horizontal or vertical)
 --
-viewSplit :: PaneMonad alpha => Direction -> alpha ()
-viewSplit dir = do
+viewSplit :: PaneMonad alpha => Orientation -> alpha ()
+viewSplit orientation = do
     mbPanePath <- getActivePanePath
     case mbPanePath of
         Nothing -> return ()
-        Just panePath -> viewSplit' panePath dir
+        Just panePath -> viewSplit' panePath orientation
 
-viewSplit' :: PaneMonad alpha => PanePath -> Direction -> alpha ()
-viewSplit' panePath dir = do
+viewSplit' :: PaneMonad alpha => PanePath -> Orientation -> alpha ()
+viewSplit' panePath orientation = do
     l <- getLayout
     case layoutFromPath panePath l of
         (TerminalP _ _ _ (Just _) _) -> trace "ViewFrame>>viewSplit': can't split detached: " return ()
@@ -465,25 +473,27 @@ viewSplit' panePath dir = do
             ind <- notebookGetCurrentPage activeNotebook
             parent <- widgetGetParent activeNotebook >>= liftIO . unsafeCastTo Container . fromJust
             let (name,altname,paneDir,
-                 oldPath,newPath) =  case dir of
-                                        Horizontal  -> ("top",
-                                                        "bottom",
-                                                        TopP,
-                                                        panePath ++ [SplitP TopP],
-                                                        panePath ++ [SplitP BottomP])
-                                        Vertical    -> ("left",
-                                                        "right",
-                                                        LeftP,
-                                                        panePath ++ [SplitP LeftP],
-                                                        panePath ++ [SplitP RightP])
+                 oldPath,newPath) = case orientation of
+                                        OrientationHorizontal ->
+                                            ( "top"
+                                            , "bottom"
+                                            , TopP
+                                            , panePath ++ [SplitP TopP]
+                                            , panePath ++ [SplitP BottomP])
+                                        OrientationVertical ->
+                                            ( "left"
+                                            , "right"
+                                            , LeftP
+                                            , panePath ++ [SplitP LeftP]
+                                            , panePath ++ [SplitP RightP])
             adjustNotebooks panePath oldPath
             frameState  <- getFrameState
             notebookPtr <- liftIO $ unsafeManagedPtrCastPtr activeNotebook
             setPanePathFromNB $ Map.insert notebookPtr oldPath (panePathFromNB frameState)
             nb  <- newNotebook newPath
-            newpane <- case dir of
-                          Horizontal  -> vPanedNew >>= liftIO . toPaned
-                          Vertical    -> hPanedNew >>= liftIO . toPaned
+            newpane <- panedNew $ case orientation of
+                  OrientationHorizontal  -> OrientationVertical
+                  OrientationVertical    -> OrientationHorizontal
             rName <- widgetGetName activeNotebook
             widgetSetName newpane rName
             widgetSetName nb altname
@@ -1416,7 +1426,7 @@ widgetGetRel w sl cf = do
 getUIAction :: PaneMonad alpha => Text -> (Action -> IO a) -> alpha a
 getUIAction str f = do
     uiManager <- getUiManagerSt
-    findAction <- nullToNothing $ uIManagerGetAction uiManager str
+    findAction <- uIManagerGetAction uiManager str
     case findAction of
         Just act -> liftIO $ f act
         Nothing  -> error $"getUIAction can't find action " ++ T.unpack str

@@ -38,6 +38,7 @@ import Data.Text (Text)
 import Data.Monoid ((<>), mconcat)
 
 import Control.Event
+import Graphics.UI.Utils
 import Graphics.UI.Editor.Parameters
 import Graphics.UI.Editor.Basics
 --import Graphics.UI.Frame.ViewFrame
@@ -50,8 +51,7 @@ import GI.Gtk.Objects.Notebook
         notebookAppendPage, notebookSetScrollable, notebookSetShowTabs,
         notebookSetTabPos, notebookNew, Notebook(..))
 import GI.Gtk.Objects.ScrolledWindow
-       (scrolledWindowSetPolicy, scrolledWindowAddWithViewport,
-        scrolledWindowNew)
+       (scrolledWindowSetPolicy, scrolledWindowNew)
 import GI.Gtk.Objects.TreeView
        (treeViewSetHeadersVisible, treeViewAppendColumn,
         treeViewGetSelection, treeViewNewWithModel)
@@ -74,7 +74,8 @@ import GI.Gtk.Objects.Frame
        (frameSetLabel, frameSetShadowType, frameNew)
 import GI.Gtk.Objects.Bin (Bin(..), binGetChild)
 import GI.Gtk.Enums
-       (SelectionMode(..), PolicyType(..), PositionType(..))
+       (Orientation(..), Align(..), SelectionMode(..), PolicyType(..),
+        PositionType(..))
 import Data.GI.Base.ManagedPtr (castTo, unsafeCastTo)
 import Data.GI.Gtk.ModelView.CustomStore (customStoreGetRow)
 import GI.Gtk.Objects.Adjustment (noAdjustment)
@@ -86,6 +87,12 @@ import GI.Gtk.Structs.TreePath (treePathNewFirst)
 import Data.GI.Gtk.ModelView.Types
        (treeSelectionGetSelectedRows', treePathGetIndices')
 import Control.Monad.IO.Class (MonadIO(..), MonadIO)
+import GI.Gtk
+       (orientableSetOrientation, Orientation, widgetSetVexpand,
+        widgetSetHexpand, widgetSetMarginEnd, widgetSetMarginStart,
+        widgetSetMarginBottom, widgetSetMarginTop, noWidget,
+        widgetSetValign, widgetSetHalign, gridNew)
+import Data.Foldable (forM_)
 
 --
 -- | A constructor type for a field desciption
@@ -126,8 +133,8 @@ newNotebook = do
 
 buildEditor :: (Applicative m, MonadIO m) => FieldDescription alpha -> alpha -> m (Widget, Injector alpha , alpha -> Extractor alpha , Notifier)
 buildEditor (FD paras editorf) v  =  liftIO $ editorf v
-buildEditor (HFD paras descrs) v =   buildBoxEditor descrs Horizontal v
-buildEditor (VFD paras descrs) v =   buildBoxEditor descrs Vertical v
+buildEditor (HFD paras descrs) v =   buildBoxEditor descrs OrientationHorizontal v
+buildEditor (VFD paras descrs) v =   buildBoxEditor descrs OrientationVertical v
 buildEditor (NFD pairList)     v =   do
     nb <- newNotebook
     notebookSetShowTabs nb False
@@ -136,7 +143,7 @@ buildEditor (NFD pairList)     v =   do
     notifier <- emptyNotifier
     mapM_ (\ (labelString, widget) -> do
         sw <- scrolledWindowNew noAdjustment noAdjustment
-        scrolledWindowAddWithViewport sw widget
+        containerAdd sw widget
         scrolledWindowSetPolicy sw PolicyTypeAutomatic PolicyTypeAutomatic
         notebookAppendPage nb sw . Just =<< labelNew (Just labelString))
          (zip (map fst pairList) widgets)
@@ -161,34 +168,43 @@ buildEditor (NFD pairList)     v =   do
             [[i]] -> notebookSetCurrentPage nb i
             _ -> return ()
 
-    hb          <- hBoxNew False 0
+    grid        <- gridNew
     sw          <- scrolledWindowNew noAdjustment noAdjustment
     containerAdd sw listView
     scrolledWindowSetPolicy sw PolicyTypeNever PolicyTypeAutomatic
-    boxPackStart' hb sw PackNatural 0
-    boxPackEnd' hb nb PackGrow 7
+    widgetSetHalign sw AlignStart
+    widgetSetVexpand sw True
+    containerAdd grid sw
+    widgetSetHexpand nb True
+    widgetSetVexpand nb True
+    containerAdd grid nb
     let newInj v = mapM_ (\ setInj -> setInj v) setInjs
     let newExt v = extract v getExts
     mapM_ (propagateEvent notifier notifiers) allGUIEvents
-    widget <- liftIO $ toWidget hb
+    widget <- toWidget grid
     return (widget, newInj, newExt, notifier)
 
-buildBoxEditor :: (Applicative m, MonadIO m) => [FieldDescription alpha] -> Direction -> alpha
+buildBoxEditor :: (Applicative m, MonadIO m) => [FieldDescription alpha] -> Orientation -> alpha
     -> m (Widget, Injector alpha , alpha -> Extractor alpha , Notifier)
-buildBoxEditor descrs dir v = do
+buildBoxEditor descrs orientation v = do
     resList <- mapM (`buildEditor` v) descrs
     notifier <- emptyNotifier
     let (widgets, setInjs, getExts, notifiers) = unzip4 resList
-    hb <- case dir of
-            Horizontal -> hBoxNew False 0 >>= liftIO . unsafeCastTo Box
-            Vertical   -> vBoxNew False 0 >>= liftIO . unsafeCastTo Box
+    grid <- gridNew
+    orientableSetOrientation grid orientation
     let newInj v = mapM_ (\ setInj -> setInj v) setInjs
     let fieldNames = map (fromMaybe "Unnamed" . getParameterPrim paraName . parameters) descrs
     let packParas = map (getParameter paraPack . parameters) descrs
     mapM_ (propagateEvent notifier notifiers) allGUIEvents
     let newExt v = extractAndValidate v getExts fieldNames notifier
-    mapM_ (\ (w,p) -> boxPackStart' hb w p 0) $ zip widgets packParas
-    hbWidget <- liftIO $ toWidget hb
+    forM_ (zip widgets packParas) $ \(w, p) -> do
+        case p of
+            PackRepel   -> setPrimaryAlign grid w AlignEnd >> setPrimaryExpand grid w True
+            PackNatural -> setPrimaryAlign grid w AlignStart
+            PackGrow    -> setPrimaryExpand grid w True
+        setSecondaryExpand grid w True
+        containerAdd grid w
+    hbWidget <- liftIO $ toWidget grid
     return (hbWidget, newInj, newExt, notifier)
 
 
@@ -226,29 +242,25 @@ mkField parameters getter setter editor =
 --
 mkEditor :: (Container -> Injector alpha) -> Extractor alpha -> Editor alpha
 mkEditor injectorC extractor parameters notifier = do
-    let (xalign, yalign, xscale, yscale) = getParameter paraOuterAlignment parameters
-    outerAlig <- alignmentNew xalign yalign xscale yscale
-    let (paddingTop, paddingBottom, paddingLeft, paddingRight) = getParameter paraOuterPadding parameters
-    alignmentSetPadding outerAlig paddingTop paddingBottom paddingLeft paddingRight
     frame   <-  frameNew Nothing
+    widgetSetHalign frame $ getParameter paraHAlign parameters
+    widgetSetValign frame $ getParameter paraVAlign parameters
+    let (top, bottom, start, end) = getParameter paraMargin parameters
+    widgetSetMarginTop frame top
+    widgetSetMarginBottom frame bottom
+    widgetSetMarginStart frame start
+    widgetSetMarginEnd frame end
     frameSetShadowType frame (getParameter paraShadow parameters)
     case getParameter paraName parameters of
         "" -> return ()
         str -> when (getParameter paraShowLabel parameters) $
                   frameSetLabel frame (Just str)
-
-    containerAdd outerAlig frame
-    let (xalign, yalign, xscale, yscale) =  getParameter paraInnerAlignment parameters
-    innerAlig <- alignmentNew xalign yalign xscale yscale
-    let (paddingTop, paddingBottom, paddingLeft, paddingRight) = getParameter paraInnerPadding parameters
-    alignmentSetPadding innerAlig paddingTop paddingBottom paddingLeft paddingRight
-    containerAdd frame innerAlig
     let (x,y) = getParameter paraMinSize parameters
-    widgetSetSizeRequest outerAlig x y
+    widgetSetSizeRequest frame x y
     let name  =  getParameter paraName parameters
-    widgetSetName outerAlig name
-    build <- injectorC <$> toContainer innerAlig
-    w <- toWidget outerAlig
+    widgetSetName frame name
+    build <- injectorC <$> toContainer frame
+    w <- toWidget frame
     return (w, build, extractor)
 
 -- | Convenience method to validate and extract fields

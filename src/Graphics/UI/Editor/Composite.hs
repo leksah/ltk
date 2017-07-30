@@ -41,6 +41,7 @@ import qualified Data.Text as T (pack, unpack, null)
 
 import Default
 import Control.Event
+import Graphics.UI.Utils
 import Graphics.UI.Editor.Parameters
 import Graphics.UI.Editor.Basics
 import Graphics.UI.Editor.MakeEditor
@@ -60,7 +61,10 @@ import MyMissing (forceJust)
 import Unsafe.Coerce (unsafeCoerce)
 import Debug.Trace (trace)
 import GI.Gtk
-       (setCellRendererTextText, noTreeViewColumn, noAdjustment,
+       (gridSetRowSpacing, gridSetColumnSpacing, orientableSetOrientation,
+        widgetSetHexpand, widgetSetVexpand, toWidget, buttonBoxNew,
+        noWidget, widgetSetValign, widgetSetHalign, panedNew, gridNew,
+        setCellRendererTextText, noTreeViewColumn, noAdjustment,
         FileChooserAction, treeModelGetPath, treeSelectionGetSelected,
         treeViewScrollToCell, treeViewGetColumn, treeSelectionSelectPath,
         onButtonClicked, onTreeSelectionChanged, treeViewSetHeadersVisible,
@@ -77,7 +81,8 @@ import GI.Gtk
         containerAdd, boxPackStart, vBoxNew, Box(..), hBoxNew, Widget(..))
 import Data.GI.Base.ManagedPtr (unsafeCastTo, castTo)
 import GI.Gtk.Enums
-       (ShadowType(..), SelectionMode(..), PolicyType(..))
+       (Orientation(..), PositionType(..), Align(..), ShadowType(..),
+        SelectionMode(..), PolicyType(..))
 import Data.GI.Gtk.ModelView.CellLayout
        (cellLayoutSetDataFunction)
 import Data.GI.Gtk.ModelView.SeqStore
@@ -86,6 +91,10 @@ import Data.GI.Gtk.ModelView.SeqStore
 import Data.GI.Gtk.ModelView.Types
        (treePathNewFromIndices', equalManagedPtr)
 import GI.Gtk.Structs.TreePath (treePathGetIndices)
+import Distribution.Version
+       (withinVersion, intersectVersionRanges, unionVersionRanges,
+        earlierVersion, laterVersion, thisVersion, anyVersion,
+        foldVersionRange')
 
 --
 -- | An editor which composes two subeditors
@@ -103,12 +112,15 @@ pairEditor (fstEd,fstPara) (sndEd,sndPara) parameters notifier = do
             core <- readIORef coreRef
             case core of
                 Nothing  -> do
-                    box <- case getParameter paraDirection parameters of
-                        Horizontal -> hBoxNew False 1 >>= unsafeCastTo Box
-                        Vertical   -> vBoxNew False 1 >>= unsafeCastTo Box
-                    boxPackStart box fstFrame True True 0
-                    boxPackStart box sndFrame True True 0
-                    containerAdd widget box
+                    grid <- gridNew
+                    orientableSetOrientation grid $ getParameter paraOrientation parameters
+                    gridSetColumnSpacing grid 1
+                    gridSetRowSpacing grid 1
+                    setPrimaryExpand grid fstFrame True
+                    containerAdd grid fstFrame
+                    setPrimaryExpand grid sndFrame True
+                    containerAdd grid sndFrame
+                    containerAdd widget grid
                     inj1 v1
                     inj2 v2
                     writeIORef coreRef (Just (fst,snd))
@@ -145,13 +157,15 @@ tupel3Editor p1 p2 p3 parameters notifier = do
             core <- readIORef coreRef
             case core of
                 Nothing  -> do
-                    box <- case getParameter paraDirection parameters of
-                        Horizontal -> hBoxNew False 1 >>= unsafeCastTo Box
-                        Vertical   -> vBoxNew False 1 >>= unsafeCastTo Box
-                    boxPackStart box frame1 True True 0
-                    boxPackStart box frame2 True True 0
-                    boxPackStart box frame3 True True 0
-                    containerAdd widget box
+                    grid <- gridNew
+                    orientableSetOrientation grid $ getParameter paraOrientation parameters
+                    setPrimaryExpand grid frame1 True
+                    containerAdd grid frame1
+                    setPrimaryExpand grid frame2 True
+                    containerAdd grid frame2
+                    setPrimaryExpand grid frame3 True
+                    containerAdd grid frame3
+                    containerAdd widget grid
                     inj1 v1
                     inj2 v2
                     inj3 v3
@@ -189,9 +203,9 @@ splitEditor (fstEd,fstPara) (sndEd,sndPara) parameters notifier = do
             core <- readIORef coreRef
             case core of
                 Nothing  -> do
-                    paned <- case getParameter paraDirection parameters of
-                        Horizontal -> vPanedNew >>= unsafeCastTo Paned
-                        Vertical   -> hPanedNew >>= unsafeCastTo Paned
+                    paned <- panedNew $ case getParameter paraOrientation parameters of
+                        OrientationHorizontal -> OrientationVertical
+                        OrientationVertical   -> OrientationHorizontal
                     panedPack1 paned fstFrame True True
                     panedPack2 paned sndFrame True True
                     containerAdd widget paned
@@ -228,26 +242,29 @@ maybeEditor (childEdit, childParams) positive boolLabel parameters notifier = do
             core <- readIORef coreRef
             case core of
                 Nothing  -> do
-                    box <- case getParameter paraDirection parameters of
-                        Horizontal -> hBoxNew False 1 >>= unsafeCastTo Box
-                        Vertical   -> vBoxNew False 1 >>= unsafeCastTo Box
+                    grid <- gridNew
+                    orientableSetOrientation grid $ getParameter paraOrientation parameters
+                    gridSetColumnSpacing grid 1
+                    gridSetRowSpacing grid 1
                     be@(boolFrame,inj1,ext1) <- boolEditor
                         (paraName <<<- ParaName boolLabel $ emptyParams)
                         notifierBool
-                    boxPackStart box boolFrame False False 0
-                    containerAdd widget box
+                    setPrimaryAlign grid boolFrame AlignStart
+                    containerAdd grid boolFrame
+                    containerAdd widget grid
                     registerEvent notifierBool Clicked (onClickedHandler widget coreRef childRef cNoti)
                     propagateEvent notifier [notifierBool] MayHaveChanged
                     case mbVal of
                         Nothing -> inj1 (not positive)
                         Just val -> do
                             (childWidget,inj2,ext2) <- getChildEditor childRef childEdit childParams cNoti
-                            boxPackEnd box childWidget True True 0
+                            setPrimaryExpand grid childWidget True
+                            containerAdd grid childWidget
                             widgetShowAll childWidget
                             inj1 positive
                             inj2 val
-                    writeIORef coreRef (Just (be,box))
-                Just (be@(boolFrame,inj1,extt),box) -> do
+                    writeIORef coreRef (Just (be,grid))
+                Just (be@(boolFrame,inj1,extt),grid) -> do
                     hasChild <- hasChildEditor childRef
                     case mbVal of
                         Nothing ->
@@ -267,7 +284,8 @@ maybeEditor (childEdit, childParams) positive boolLabel parameters notifier = do
                                 else do
                                     inj1 positive
                                     (childWidget,inj2,_) <- getChildEditor childRef childEdit childParams cNoti
-                                    boxPackEnd box childWidget True True 0
+                                    setPrimaryExpand grid childWidget True
+                                    containerAdd grid childWidget
                                     widgetShowAll childWidget
                                     inj2 val)
         (do
@@ -292,7 +310,7 @@ maybeEditor (childEdit, childParams) positive boolLabel parameters notifier = do
         core <- readIORef coreRef
         case core of
             Nothing  -> error "Impossible"
-            Just (be@(boolFrame,inj1,ext1),vBox) -> do
+            Just (be@(boolFrame,inj1,ext1),grid) -> do
                 mbBool <- ext1
                 case mbBool of
                     Just bool ->
@@ -305,9 +323,10 @@ maybeEditor (childEdit, childParams) positive boolLabel parameters notifier = do
                             else do
                                 hasChild <- hasChildEditor childRef
                                 (childWidget,inj2,ext2) <- getChildEditor childRef childEdit childParams cNoti
-                                children <- containerGetChildren vBox
-                                unless (any (equalManagedPtr childWidget) children) $
-                                    boxPackEnd vBox childWidget False False 0
+                                children <- containerGetChildren grid
+                                unless (any (equalManagedPtr childWidget) children) $ do
+                                    setPrimaryAlign grid childWidget AlignStart
+                                    containerAdd grid childWidget
                                 inj2 getDefault
                                 widgetShowAll childWidget
                     Nothing -> return ()
@@ -342,34 +361,36 @@ disableEditor (childEdit, childParams) positive boolLabel parameters notifier = 
             core <- readIORef coreRef
             case core of
                 Nothing  -> do
-                    box <- case getParameter paraDirection parameters of
-                        Horizontal -> hBoxNew False 1 >>= unsafeCastTo Box
-                        Vertical   -> vBoxNew False 1 >>= unsafeCastTo Box
+                    grid <- gridNew
+                    orientableSetOrientation grid $ getParameter paraOrientation parameters
                     be@(boolFrame,inj1,ext1) <- boolEditor
                         (paraName <<<- ParaName boolLabel $ emptyParams)
                         notifierBool
-                    boxPackStart box boolFrame False False 0
-                    containerAdd widget box
+                    setPrimaryAlign grid boolFrame AlignStart
+                    containerAdd grid boolFrame
+                    containerAdd widget grid
                     registerEvent notifierBool Clicked
                         (onClickedHandler widget coreRef childRef cNoti)
                     propagateEvent notifier [notifierBool] MayHaveChanged
                     case mbVal of
                         (False,val) -> do
                             (childWidget,inj2,ext2) <- getChildEditor childRef childEdit childParams cNoti
-                            boxPackEnd box childWidget True True 0
+                            setPrimaryExpand grid childWidget True
+                            containerAdd grid childWidget
                             widgetShowAll childWidget
                             inj1 ( not positive)
                             inj2 val
                             widgetSetSensitive childWidget False
                         (True,val) -> do
                             (childWidget,inj2,ext2) <- getChildEditor childRef childEdit childParams cNoti
-                            boxPackEnd box childWidget True True 0
+                            setPrimaryExpand grid childWidget True
+                            containerAdd grid childWidget
                             widgetShowAll childWidget
                             inj1 positive
                             inj2 val
                             widgetSetSensitive childWidget True
-                    writeIORef coreRef (Just (be,box))
-                Just (be@(boolFrame,inj1,extt),box) -> do
+                    writeIORef coreRef (Just (be,grid))
+                Just (be@(boolFrame,inj1,extt),grid) -> do
                     hasChild <- hasChildEditor childRef
                     case mbVal of
                         (False,val) ->
@@ -389,7 +410,8 @@ disableEditor (childEdit, childParams) positive boolLabel parameters notifier = 
                                 else do
                                     inj1 positive
                                     (childWidget,inj2,_) <- getChildEditor childRef childEdit childParams cNoti
-                                    boxPackEnd box childWidget True True 0
+                                    setPrimaryExpand grid childWidget True
+                                    containerAdd grid childWidget
                                     widgetSetSensitive childWidget True
                                     inj2 val)
         (do
@@ -419,7 +441,7 @@ disableEditor (childEdit, childParams) positive boolLabel parameters notifier = 
         core <- readIORef coreRef
         case core of
             Nothing  -> error "Impossible"
-            Just (be@(boolFrame,inj1,ext1),vBox) -> do
+            Just (be@(boolFrame,inj1,ext1),grid) -> do
                 mbBool <- ext1
                 case mbBool of
                     Just bool ->
@@ -438,7 +460,8 @@ disableEditor (childEdit, childParams) positive boolLabel parameters notifier = 
                                         widgetSetSensitive childWidget True
                                     else do
                                         (childWidget,inj2,_) <- getChildEditor childRef childEdit childParams cNoti
-                                        boxPackEnd vBox childWidget False False 0
+                                        setPrimaryAlign grid childWidget AlignStart
+                                        containerAdd grid childWidget
                                         inj2 getDefault
                                         widgetSetSensitive childWidget True
                     Nothing -> return ()
@@ -478,34 +501,38 @@ eitherOrEditor (leftEditor,leftParams) (rightEditor,rightParams)
             case core of
                 Nothing  -> do
                     registerEvent noti1 Clicked (onClickedHandler widget coreRef)
-                    box <- case getParameter paraDirection parameters of
-                        Horizontal -> hBoxNew False 1 >>= unsafeCastTo Box
-                        Vertical   -> vBoxNew False 1 >>= unsafeCastTo Box
-                    boxPackStart box boolFrame False False 0
-                    containerAdd widget box
+                    grid <- gridNew
+                    orientableSetOrientation grid $ getParameter paraOrientation parameters
+                    gridSetColumnSpacing grid 1
+                    gridSetRowSpacing grid 1
+                    setPrimaryAlign grid boolFrame AlignStart
+                    setPrimaryAlign grid leftFrame AlignStart
+                    setPrimaryAlign grid rightFrame AlignStart
+                    containerAdd grid boolFrame
+                    containerAdd widget grid
                     case v of
                         Left vl -> do
-                          boxPackStart box leftFrame False False 0
+                          containerAdd grid leftFrame
                           inj2 vl
                           inj3 getDefault
                           inj1 True
                         Right vr  -> do
-                          boxPackStart box rightFrame False False 0
+                          containerAdd grid rightFrame
                           inj3 vr
                           inj2 getDefault
                           inj1 False
-                    writeIORef coreRef (Just (be,le,re,box))
-                Just ((_,inj1,_),(leftFrame,inj2,_),(rightFrame,inj3,_),box) ->
+                    writeIORef coreRef (Just (be,le,re,grid))
+                Just ((_,inj1,_),(leftFrame,inj2,_),(rightFrame,inj3,_),grid) ->
                     case v of
                             Left vl -> do
-                              containerRemove box rightFrame
-                              boxPackStart box leftFrame False False 0
+                              containerRemove grid rightFrame
+                              containerAdd grid leftFrame
                               inj2 vl
                               inj3 getDefault
                               inj1 True
                             Right vr  -> do
-                              containerRemove box leftFrame
-                              boxPackStart box rightFrame False False 0
+                              containerRemove grid leftFrame
+                              containerAdd grid rightFrame
                               inj3 vr
                               inj2 getDefault
                               inj1 False)
@@ -533,18 +560,18 @@ eitherOrEditor (leftEditor,leftParams) (rightEditor,rightParams)
         core <- readIORef coreRef
         case core of
             Nothing  -> error "Impossible"
-            Just (be@(_,_,ext1),(leftFrame,_,_),(rightFrame,_,_),box) -> do
+            Just (be@(_,_,ext1),(leftFrame,_,_),(rightFrame,_,_),grid) -> do
                 mbBool <- ext1
                 case mbBool of
                     Just bool ->
                             if bool then do
-                              containerRemove box rightFrame
-                              boxPackStart box leftFrame False False 0
-                              widgetShowAll box
+                              containerRemove grid rightFrame
+                              containerAdd grid leftFrame
+                              widgetShowAll grid
                             else do
-                              containerRemove box leftFrame
-                              boxPackStart box rightFrame False False 0
-                              widgetShowAll box
+                              containerRemove grid leftFrame
+                              containerAdd grid rightFrame
+                              widgetShowAll grid
                     Nothing -> return ()
                 return event{gtkReturn=True}
 
@@ -572,22 +599,19 @@ multisetEditor (ColumnDescr showHeaders columnsDD) (singleEditor, sParams) mbSor
             core <- readIORef coreRef
             case core of
                 Nothing  -> do
-                    (box,buttonBox) <- case getParameter paraDirection parameters of
-                        Horizontal -> do
-                            b  <- hBoxNew False 1 >>= unsafeCastTo Box
-                            bb <- vButtonBoxNew >>= unsafeCastTo ButtonBox
-                            return (b, bb)
-                        Vertical -> do
-                            b  <- vBoxNew False 1 >>= unsafeCastTo Box
-                            bb <- hButtonBoxNew >>= unsafeCastTo ButtonBox
-                            return (b, bb)
+                    let orientation = getParameter paraOrientation parameters
+                    grid <- gridNew
+                    orientableSetOrientation grid orientation
+                    buttonBox <- case orientation of
+                        OrientationHorizontal -> buttonBoxNew OrientationVertical
+                        OrientationVertical -> buttonBoxNew OrientationHorizontal
                     (frameS,injS,extS) <- singleEditor sParams cnoti
                     mapM_ (propagateEvent notifier [cnoti]) allGUIEvents
-                    addButton   <- buttonNewWithLabel "Add"
+                    addButton    <- buttonNewWithLabel "Add"
                     removeButton <- buttonNewWithLabel "Remove"
                     containerAdd buttonBox addButton
                     containerAdd buttonBox removeButton
-                    seqStore   <-  seqStoreNew ([]:: [alpha])
+                    seqStore <- seqStoreNew ([]:: [alpha])
                     activateEvent seqStore notifier
                         (Just (\ w h -> afterTreeModelRowInserted w (\ _ _ -> void h))) MayHaveChanged
                     activateEvent seqStore notifier
@@ -612,11 +636,17 @@ multisetEditor (ColumnDescr showHeaders columnsDD) (singleEditor, sParams) mbSor
                         ) columnsDD
                     treeViewSetHeadersVisible treeView showHeaders
                     onTreeSelectionChanged sel $ selectionHandler sel seqStore injS
-                    boxPackStart box sw True True 0
-                    boxPackStart box buttonBox False False 0
-                    boxPackStart box frameS False False 0
+                    setPrimaryExpand grid sw True
+                    setSecondaryExpand grid sw True
+                    containerAdd grid sw
+                    setPrimaryAlign grid buttonBox AlignEnd
+                    setSecondaryExpand grid buttonBox True
+                    containerAdd grid buttonBox
+                    setPrimaryAlign grid frameS AlignEnd
+                    setSecondaryExpand grid frameS True
+                    containerAdd grid frameS
                     activateEvent treeView notifier Nothing FocusOut
-                    containerAdd widget box
+                    containerAdd widget grid
                     seqStoreClear seqStore
                     mapM_ (seqStoreAppend seqStore)
                         (case mbSort of
@@ -693,7 +723,7 @@ filesEditor fp act label p =
         (Just sort)
         (Just (==))
         (paraShadow <<<- ParaShadow ShadowTypeIn $
-            paraDirection  <<<- ParaDirection Vertical $ p)
+            paraOrientation  <<<- ParaOrientation OrientationVertical $ p)
 
 textsEditor :: (Text -> Bool) -> Bool -> Editor [Text]
 textsEditor validation trimBlanks p =
@@ -710,7 +740,7 @@ dependencyEditor packages para noti = do
         (comboEntryEditor ((sort . nub) (map (T.pack . display . pkgName) packages))
             , paraName <<<- ParaName "Select" $ emptyParams)
         (versionRangeEditor,paraName <<<- ParaName "Version" $ emptyParams)
-        (paraDirection <<<- ParaDirection Vertical $ para)
+        (paraOrientation <<<- ParaOrientation OrientationVertical $ para)
         noti
     let pinj (Dependency pn@(PackageName s) v) = inj (T.pack s,v)
     let pext = do
@@ -727,15 +757,15 @@ dependenciesEditor packages p =
         (ColumnDescr True [("Package",\cell (Dependency (PackageName str) _) -> setCellRendererTextText cell $ T.pack str)
                            ,("Version",\cell (Dependency _ vers) -> setCellRendererTextText cell $ T.pack $ display vers)])
         (dependencyEditor packages,
-            paraOuterAlignment <<<- ParaInnerAlignment (0.0, 0.5, 1.0, 1.0)
-                $ paraInnerAlignment <<<- ParaOuterAlignment (0.0, 0.5, 1.0, 1.0)
+            paraHAlign <<<- ParaHAlign AlignFill
+                $ paraVAlign <<<- ParaVAlign AlignCenter
                    $ emptyParams)
         (Just (sortBy (\ (Dependency p1 _) (Dependency p2 _) -> compare p1 p2)))
         (Just (\ (Dependency p1 _) (Dependency p2 _) -> p1 == p2))
         (paraShadow <<<- ParaShadow ShadowTypeIn
-            $ paraOuterAlignment <<<- ParaInnerAlignment (0.0, 0.5, 1.0, 1.0)
-                $ paraInnerAlignment <<<- ParaOuterAlignment (0.0, 0.5, 1.0, 1.0)
-                    $ paraDirection  <<<-  ParaDirection Vertical
+            $ paraHAlign <<<- ParaHAlign AlignFill
+                $ paraVAlign <<<- ParaVAlign AlignCenter
+                    $ paraOrientation <<<- ParaOrientation OrientationVertical
                         $ paraPack <<<- ParaPack PackGrow
                             $ p)
 
@@ -747,12 +777,11 @@ versionRangeEditor para noti = do
                (pairEditor (comboSelectionEditor v1 (T.pack . show), emptyParams)
                   (versionEditor,
                    paraName <<<- ParaName "Enter Version" $ emptyParams),
-                paraDirection <<<- ParaDirection Vertical $
+                paraOrientation <<<- ParaOrientation OrientationVertical $
                    paraName <<<- ParaName "Simple" $
-                     paraOuterAlignment <<<- ParaOuterAlignment (0.0, 0.0, 0.0, 0.0) $
-                       paraOuterPadding <<<- ParaOuterPadding (0, 0, 0, 0) $
-                         paraInnerAlignment <<<- ParaInnerAlignment (0.0, 0.0, 0.0, 0.0) $
-                           paraInnerPadding <<<- ParaInnerPadding (0, 0, 0, 0) $ emptyParams)
+                      paraHAlign <<<- ParaHAlign AlignStart $
+                         paraVAlign <<<- ParaVAlign AlignStart $
+                            paraMargin <<<- ParaMargin (0, 0, 0, 0) $ emptyParams)
                (tupel3Editor
                   (comboSelectionEditor v2 (T.pack . show), emptyParams)
                   (versionRangeEditor,
@@ -760,47 +789,41 @@ versionRangeEditor para noti = do
                   (versionRangeEditor,
                    paraShadow <<<- ParaShadow ShadowTypeIn $ emptyParams),
                 paraName <<<- ParaName "Complex" $
-                  paraDirection <<<- ParaDirection Vertical $
-                    paraOuterAlignment <<<- ParaOuterAlignment (0.0, 0.0, 0.0, 0.0) $
-                      paraOuterPadding <<<- ParaOuterPadding (0, 0, 0, 0) $
-                        paraInnerAlignment <<<- ParaInnerAlignment (0.0, 0.0, 0.0, 0.0) $
-                          paraInnerPadding <<<- ParaInnerPadding (0, 0, 0, 0) $ emptyParams)
+                   paraOrientation <<<- ParaOrientation OrientationVertical $
+                      paraHAlign <<<- ParaHAlign AlignStart $
+                         paraVAlign <<<- ParaVAlign AlignStart $
+                            paraMargin <<<- ParaMargin (0, 0, 0, 0) $ emptyParams)
                "Select version range",
              emptyParams)
             False "Any Version"
-            (paraDirection <<<- ParaDirection Vertical $ para)
+            (paraOrientation <<<- ParaOrientation OrientationVertical $ para)
             noti
-    let vrinj AnyVersion                =   inj Nothing
-        vrinj (WildcardVersion v)       =   inj (Just (Left (WildcardVersionS,v)))
-        vrinj (ThisVersion v)           =   inj (Just (Left (ThisVersionS,v)))
-        vrinj (LaterVersion v)          =   inj (Just (Left (LaterVersionS,v)))
-        vrinj (EarlierVersion v)        =   inj (Just (Left (EarlierVersionS,v)))
-        vrinj (UnionVersionRanges (ThisVersion v1) (LaterVersion v2)) | v1 == v2
-                                        =  inj (Just (Left (ThisOrLaterVersionS,v1)))
-        vrinj (UnionVersionRanges (LaterVersion v1) (ThisVersion v2)) | v1 == v2
-                                        =  inj (Just (Left (ThisOrLaterVersionS,v1)))
-        vrinj (UnionVersionRanges (ThisVersion v1) (EarlierVersion v2)) | v1 == v2
-                                        =  inj (Just (Left (ThisOrEarlierVersionS,v1)))
-        vrinj (UnionVersionRanges (EarlierVersion v1) (ThisVersion v2)) | v1 == v2
-                                        =  inj (Just (Left (ThisOrEarlierVersionS,v1)))
-        vrinj (UnionVersionRanges v1 v2)=  inj (Just (Right (UnionVersionRangesS,v1,v2)))
-        vrinj (IntersectVersionRanges v1 v2)
-                                        =    inj (Just (Right (IntersectVersionRangesS,v1,v2)))
+    let vrinj = inj . snd . foldVersionRange'
+                    (anyVersion, Nothing)
+                    (\v -> (thisVersion v, Just (Left (ThisVersionS,v))))
+                    (\v -> (laterVersion v, Just (Left (LaterVersionS,v))))
+                    (\v -> (earlierVersion v, Just (Left (EarlierVersionS,v))))
+                    (\v -> (unionVersionRanges (thisVersion v) (laterVersion v), Just (Left (ThisOrLaterVersionS,v))))
+                    (\v -> (unionVersionRanges (thisVersion v) (earlierVersion v), Just (Left (ThisOrEarlierVersionS,v))))
+                    (\v1 v2 -> (withinVersion v1, Just (Left (WildcardVersionS,v1))))
+                    (\(vr1, r1) (vr2, r2) -> (unionVersionRanges vr1 vr2, Just (Right (UnionVersionRangesS,vr1,vr2))))
+                    (\(vr1, r1) (vr2, r2) -> (intersectVersionRanges vr1 vr2, Just (Right (IntersectVersionRangesS,vr1,vr2))))
+                    id
     let vrext = do  mvr <- ext
                     case mvr of
-                        Nothing -> return (Just AnyVersion)
-                        Just Nothing -> return (Just AnyVersion)
-                        Just (Just (Left (ThisVersionS,v)))     -> return (Just (ThisVersion v))
-                        Just (Just (Left (WildcardVersionS,v)))     -> return (Just (WildcardVersion v))
-                        Just (Just (Left (LaterVersionS,v)))    -> return (Just (LaterVersion v))
-                        Just (Just (Left (EarlierVersionS,v)))   -> return (Just (EarlierVersion v))
+                        Nothing -> return (Just anyVersion)
+                        Just Nothing -> return (Just anyVersion)
+                        Just (Just (Left (ThisVersionS,v)))          -> return (Just (thisVersion v))
+                        Just (Just (Left (WildcardVersionS,v)))      -> return (Just (withinVersion v))
+                        Just (Just (Left (LaterVersionS,v)))         -> return (Just (laterVersion v))
+                        Just (Just (Left (EarlierVersionS,v)))       -> return (Just (earlierVersion v))
 
-                        Just (Just (Left (ThisOrLaterVersionS,v)))   -> return (Just (orLaterVersion  v))
-                        Just (Just (Left (ThisOrEarlierVersionS,v)))   -> return (Just (orEarlierVersion  v))
+                        Just (Just (Left (ThisOrLaterVersionS,v)))   -> return (Just (orLaterVersion v))
+                        Just (Just (Left (ThisOrEarlierVersionS,v))) -> return (Just (orEarlierVersion v))
                         Just (Just (Right (UnionVersionRangesS,v1,v2)))
-                                                        -> return (Just (UnionVersionRanges v1 v2))
+                                                        -> return (Just (unionVersionRanges v1 v2))
                         Just (Just (Right (IntersectVersionRangesS,v1,v2)))
-                                                        -> return (Just (IntersectVersionRanges v1 v2))
+                                                        -> return (Just (intersectVersionRanges v1 v2))
     return (wid,vrinj,vrext)
         where
             v1 = [ThisVersionS,WildcardVersionS,LaterVersionS,ThisOrLaterVersionS,EarlierVersionS,ThisOrEarlierVersionS]
@@ -809,18 +832,18 @@ versionRangeEditor para noti = do
 data Version1 = ThisVersionS | WildcardVersionS | LaterVersionS | ThisOrLaterVersionS | EarlierVersionS | ThisOrEarlierVersionS
     deriving (Eq)
 instance Show Version1 where
-    show ThisVersionS   =  "This Version"
-    show WildcardVersionS   =  "Wildcard Version"
-    show LaterVersionS  =  "Later Version"
-    show ThisOrLaterVersionS = "This or later Version"
-    show EarlierVersionS =  "Earlier Version"
+    show ThisVersionS          = "This Version"
+    show WildcardVersionS      = "Wildcard Version"
+    show LaterVersionS         = "Later Version"
+    show ThisOrLaterVersionS   = "This or later Version"
+    show EarlierVersionS       = "Earlier Version"
     show ThisOrEarlierVersionS = "This or earlier Version"
 
 data Version2 = UnionVersionRangesS | IntersectVersionRangesS
     deriving (Eq)
 instance Show Version2 where
-    show UnionVersionRangesS =  "Union Version Ranges"
-    show IntersectVersionRangesS =  "Intersect Version Ranges"
+    show UnionVersionRangesS     = "Union Version Ranges"
+    show IntersectVersionRangesS = "Intersect Version Ranges"
 
 versionEditor :: Editor Version
 versionEditor para noti = do
@@ -843,7 +866,7 @@ instance Default Version
     where getDefault = forceJust (simpleParse "0") "PackageEditor>>default version"
 
 instance Default VersionRange
-    where getDefault = AnyVersion
+    where getDefault = anyVersion
 
 instance Default Dependency
     where getDefault = Dependency getDefault getDefault

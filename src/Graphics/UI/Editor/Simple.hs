@@ -49,6 +49,7 @@ import Data.Maybe
 import Data.Int (Int32)
 import System.FilePath.Posix
 
+import Graphics.UI.Utils
 import Graphics.UI.Editor.Parameters
 --import Graphics.UI.Editor.Basics
 import Graphics.UI.Editor.MakeEditor
@@ -65,13 +66,16 @@ import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.GI.Base (new', GObject(..), unsafeCastTo)
 import GI.Gtk
-       (noAdjustment, setCellRendererToggleActive,
-        RadioButton, pattern STOCK_CANCEL, pattern STOCK_OK,
-        colorButtonGetColor, colorButtonSetColor, ColorButton(..),
-        onColorButtonColorSet, colorButtonNew, fontButtonGetFontName,
-        fontButtonSetFontName, FontButton(..), onFontButtonFontSet,
-        fontButtonNew, widgetDestroy, fileChooserGetFilename, dialogRun,
-        widgetShow, fileChooserSetAction, dialogAddButton, setWindowTitle,
+       (orientableSetOrientation, colorChooserGetRgba,
+        colorChooserSetRgba, widgetSetHalign, imageSetFromIconName,
+        imageNewFromIconName, noWidget,
+        gridNew, noAdjustment, setCellRendererToggleActive, RadioButton,
+        pattern STOCK_CANCEL, pattern STOCK_OK, colorButtonGetColor, colorButtonSetColor,
+        ColorButton(..), onColorButtonColorSet, colorButtonNew,
+        fontButtonGetFontName, fontButtonSetFontName, FontButton(..),
+        onFontButtonFontSet, fontButtonNew, widgetDestroy,
+        fileChooserGetFilename, dialogRun, widgetShow,
+        fileChooserSetAction, dialogAddButton, setWindowTitle,
         FileChooserDialog(..), boxPackEnd, toBox, hBoxNew,
         FileChooserAction, treeSelectionSelectPath, onWidgetKeyPressEvent,
         onCellRendererToggleToggled, scrolledWindowSetMinContentHeight,
@@ -80,22 +84,24 @@ import GI.Gtk
         treeViewSetHeadersVisible, setCellRendererTextText,
         cellLayoutPackStart, treeViewAppendColumn, treeViewColumnNew,
         cellRendererTextNew, treeSelectionSetMode, treeViewGetSelection,
-        treeViewNewWithModel, Entry(..), binGetChild, comboBoxTextNewWithEntry,
-        comboBoxGetActive, comboBoxSetActive, ComboBox(..),
-        onComboBoxChanged, widgetSetSizeRequest, spinButtonGetValue,
-        spinButtonSetValue, SpinButton(..), afterSpinButtonChangeValue,
-        spinButtonNewWithRange, textBufferGetText, textBufferGetEndIter,
-        textBufferGetStartIter, textBufferSetText, textViewGetBuffer,
-        scrolledWindowSetPolicy, scrolledWindowNew, textViewNew,
-        entryGetText, entrySetText, entryNew, imageSetFromStock,
-        imageNewFromStock, setWidgetCanDefault, widgetGrabDefault,
-        buttonNewFromStock, buttonNewWithLabel, widgetSetName,
-        boxPackStart, radioButtonNewWithLabelFromWidget,
-        radioButtonNewWithLabel, vBoxNew, toggleButtonGetActive, toWidget,
-        toggleButtonSetActive, setWidgetName, checkButtonNewWithLabel,
-        containerAdd, onWidgetScrollEvent, comboBoxTextAppendText)
+        treeViewNewWithModel, Entry(..), binGetChild,
+        comboBoxTextNewWithEntry, comboBoxGetActive, comboBoxSetActive,
+        ComboBox(..), onComboBoxChanged, widgetSetSizeRequest,
+        spinButtonGetValue, spinButtonSetValue, SpinButton(..),
+        afterSpinButtonChangeValue, spinButtonNewWithRange,
+        textBufferGetText, textBufferGetEndIter, textBufferGetStartIter,
+        textBufferSetText, textViewGetBuffer, scrolledWindowSetPolicy,
+        scrolledWindowNew, textViewNew, entryGetText, entrySetText,
+        entryNew, imageSetFromStock, imageNewFromStock,
+        setWidgetCanDefault, widgetGrabDefault, buttonNewFromStock,
+        buttonNewWithLabel, widgetSetName, boxPackStart,
+        radioButtonNewWithLabelFromWidget, radioButtonNewWithLabel,
+        vBoxNew, toggleButtonGetActive, toWidget, toggleButtonSetActive,
+        setWidgetName, checkButtonNewWithLabel, containerAdd,
+        onWidgetScrollEvent, comboBoxTextAppendText)
 import GI.Gtk.Enums
-       (ResponseType(..), SelectionMode(..), PolicyType(..), IconSize(..))
+       (Orientation(..), Align(..), PositionType(..), ResponseType(..),
+        SelectionMode(..), PolicyType(..), IconSize(..))
 import Data.GI.Gtk.ComboBox
        (comboBoxSetModelText, comboBoxAppendText, comboBoxNewText)
 import Data.GI.Gtk.ModelView.CellLayout
@@ -110,7 +116,7 @@ import Data.GI.Gtk.ModelView.Types
         treePathNewFromIndices', stringToTreePath)
 import GI.Gdk (keyvalName, getEventKeyKeyval, EventScroll)
 import GI.GObject (objectNew, signalStopEmissionByName)
-import Text.PrinterParser (Color(..), toGdkColor, fromGdkColor)
+import Text.PrinterParser (Color(..), toGdkRGBA, fromGdkRGBA)
 
 -- ------------------------------------------------------------
 -- * Simple Editors
@@ -165,14 +171,15 @@ boolEditor2 label2 parameters notifier = do
             core <- readIORef coreRef
             case core of
                 Nothing  -> do
-                    box <- vBoxNew True 2
+                    grid <- gridNew
+                    orientableSetOrientation grid OrientationVertical
                     radio1 <- radioButtonNewWithLabel ([]::[RadioButton]) (getParameter paraName parameters)
                     radio2 <- radioButtonNewWithLabelFromWidget (Just radio1) label2
-                    boxPackStart box radio1 True True 2
-                    boxPackStart box radio2 True True 2
+                    containerAdd grid radio1
+                    containerAdd grid radio2
                     widgetSetName radio1 $ getParameter paraName parameters <> ".1"
                     widgetSetName radio2 $ getParameter paraName parameters <> ".2"
-                    containerAdd widget box
+                    containerAdd widget grid
                     if bool
                         then toggleButtonSetActive radio1 True
                         else toggleButtonSetActive radio2 True
@@ -205,7 +212,8 @@ enumEditor labels parameters notifier = do
             core <- readIORef coreRef
             case core of
                 Nothing  -> do
-                    box <- vBoxNew True 2
+                    grid <- gridNew
+                    orientableSetOrientation grid OrientationVertical
                     let label0 = case labels ++ map (T.pack . show) vals of
                                     (x:_) -> x
                                     _     -> error "enumEditor"
@@ -218,10 +226,10 @@ enumEditor labels parameters notifier = do
                         radio <- if n == 0
                                     then return button0
                                     else radioButtonNewWithLabelFromWidget (Just button0) label
-                        boxPackStart box radio True True 2
+                        containerAdd grid radio
                         widgetSetName radio (label <> T.pack (show n))
                         return radio) vals
-                    containerAdd widget box
+                    containerAdd widget grid
                     mapM_
                         (\e ->
                             (mapM_
@@ -257,10 +265,7 @@ clickEditor canDefault parameters notifier = do
             core <- readIORef coreRef
             case core of
                 Nothing  -> do
-                    button <- case getParameter paraStockId parameters of
-                        "" ->   buttonNewWithLabel (getParameter paraName parameters)
-                        st ->   buttonNewFromStock st
-                    widgetSetName button (getParameter paraName parameters)
+                    button <- buttonNewWithLabel (getParameter paraName parameters)
                     containerAdd widget button
                     activateEvent button notifier Nothing Clicked
                     writeIORef coreRef (Just button)
@@ -282,11 +287,11 @@ imageEditor parameters notifier = do
             core <- readIORef coreRef
             case core of
                 Nothing  -> do
-                    image <- imageNewFromStock stockId (fromIntegral $ fromEnum IconSizeLargeToolbar)
+                    image <- imageNewFromIconName (Just stockId) (fromIntegral $ fromEnum IconSizeLargeToolbar)
                     widgetSetName image (getParameter paraName parameters)
                     containerAdd widget image
                     writeIORef coreRef (Just (image,stockId))
-                Just (image,stockId2) -> imageSetFromStock image stockId (fromIntegral $ fromEnum IconSizeLargeToolbar))
+                Just (image,stockId2) -> imageSetFromIconName image (Just stockId) (fromIntegral $ fromEnum IconSizeLargeToolbar))
         (do core <- readIORef coreRef
             case core of
                 Nothing -> return Nothing
@@ -728,16 +733,12 @@ fileEditor mbFilePath action buttonName parameters notifier = do
                     mapM_ (activateEvent entry notifier Nothing) genericGUIEvents
                     registerEvent notifier Clicked (buttonHandler entry)
                     propagateAsChanged notifier [KeyPressed,ButtonPressed]
-                    box <- case getParameter paraDirection parameters of
-                                Horizontal  -> do
-                                    r <- hBoxNew False 1
-                                    toBox r
-                                Vertical    -> do
-                                    r <- vBoxNew False 1
-                                    toBox r
-                    boxPackStart box entry True True 0
-                    boxPackEnd box button False False 0
-                    containerAdd widget box
+                    grid <- gridNew
+                    orientableSetOrientation grid (getParameter paraOrientation parameters)
+                    widgetSetHalign button AlignEnd
+                    containerAdd grid entry
+                    containerAdd grid button
+                    containerAdd widget grid
                     entrySetText entry (T.pack filePath)
                     writeIORef coreRef (Just entry)
                 Just entry -> entrySetText entry (T.pack filePath))
@@ -840,14 +841,14 @@ colorEditor parameters notifier = do
                             res <- onColorButtonColorSet w (void h)
                             return (unsafeCoerce res))) MayHaveChanged
                     containerAdd widget cs
-                    colorButtonSetColor cs =<< toGdkColor c
+                    colorChooserSetRgba cs =<< toGdkRGBA c
                     writeIORef coreRef (Just cs)
-                Just cs -> colorButtonSetColor cs =<< toGdkColor c)
+                Just cs -> colorChooserSetRgba cs =<< toGdkRGBA c)
         (do core <- readIORef coreRef
             case core of
                 Nothing -> return Nothing
                 Just cs -> do
-                    c <- colorButtonGetColor cs >>= fromGdkColor
+                    c <- colorChooserGetRgba cs >>= fromGdkRGBA
                     return (Just c))
         parameters
         notifier
@@ -894,16 +895,14 @@ otherEditor func parameters notifier = do
 okCancelFields :: FieldDescription ()
 okCancelFields = HFD emptyParams [
         mkField
-            (paraStockId <<<- ParaStockId STOCK_CANCEL
-                $ paraName <<<- ParaName "Cancel"
-                    $ emptyParams)
+            (paraName <<<- ParaName "Cancel"
+                $ emptyParams)
             (const ())
             (\ _ b -> b)
             (clickEditor False)
     ,   mkField
-            (paraStockId <<<- ParaStockId STOCK_OK
-                $ paraName <<<- ParaName "Ok"
-                    $ emptyParams)
+            (paraName <<<- ParaName "Ok"
+                $ emptyParams)
             (const ())
             (\ a b -> b)
             (clickEditor True)]
