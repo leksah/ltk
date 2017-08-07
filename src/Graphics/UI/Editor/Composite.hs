@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DataKinds #-}
 -----------------------------------------------------------------------------
@@ -50,13 +51,16 @@ import Data.List (sortBy, nub, sort, elemIndex)
 import Distribution.Simple
     (orEarlierVersion,
      orLaterVersion,
-     VersionRange(..),
+     VersionRange,
      PackageName(..),
      Dependency(..),
+#if MIN_VERSION_Cabal(2,0,0)
+     unPackageName,
+     mkPackageName,
+#endif
      PackageIdentifier(..))
 import Distribution.Text (simpleParse, display)
 import Distribution.Package (pkgName)
-import Data.Version (Version(..))
 import MyMissing (forceJust)
 import Unsafe.Coerce (unsafeCoerce)
 import Debug.Trace (trace)
@@ -92,9 +96,17 @@ import Data.GI.Gtk.ModelView.Types
        (treePathNewFromIndices', equalManagedPtr)
 import GI.Gtk.Structs.TreePath (treePathGetIndices)
 import Distribution.Version
-       (withinVersion, intersectVersionRanges, unionVersionRanges,
+       (Version(..),
+#if MIN_VERSION_Cabal(2,0,0)
+        majorBoundVersion,
+#endif
+        withinVersion, intersectVersionRanges, unionVersionRanges,
         earlierVersion, laterVersion, thisVersion, anyVersion,
         foldVersionRange')
+
+#if !MIN_VERSION_Cabal(2,0,0)
+mkPackageName = PackageName
+#endif
 
 --
 -- | An editor which composes two subeditors
@@ -302,7 +314,7 @@ maybeEditor (childEdit, childParams) positive boolLabel parameters notifier = do
                             case value of
                                 Nothing -> return Nothing
                                 Just value -> return (Just (Just value))
-                        otherwise -> return (Just Nothing))
+                        _ -> return (Just Nothing))
         parameters
         notifier
     where
@@ -428,7 +440,7 @@ disableEditor (childEdit, childParams) positive boolLabel parameters notifier = 
                             case value of
                                 Nothing -> return Nothing
                                 Just value -> return (Just (True, value))
-                        otherwise -> do
+                        _ -> do
                             (_,_,ext2) <- getChildEditor childRef childEdit childParams cNoti
                             value <- ext2
                             case value of
@@ -742,19 +754,19 @@ dependencyEditor packages para noti = do
         (versionRangeEditor,paraName <<<- ParaName "Version" $ emptyParams)
         (paraOrientation <<<- ParaOrientation OrientationVertical $ para)
         noti
-    let pinj (Dependency pn@(PackageName s) v) = inj (T.pack s,v)
+    let pinj (Dependency pn v) = inj (T.pack (unPackageName pn),v)
     let pext = do
         mbp <- ext
         case mbp of
             Nothing -> return Nothing
             Just ("",v) -> return Nothing
-            Just (s,v) -> return (Just $ Dependency (PackageName (T.unpack s)) v)
+            Just (s,v) -> return (Just $ Dependency (mkPackageName (T.unpack s)) v)
     return (wid,pinj,pext)
 
 dependenciesEditor :: [PackageIdentifier] -> Editor [Dependency]
 dependenciesEditor packages p =
     multisetEditor
-        (ColumnDescr True [("Package",\cell (Dependency (PackageName str) _) -> setCellRendererTextText cell $ T.pack str)
+        (ColumnDescr True [("Package",\cell (Dependency pn _) -> setCellRendererTextText cell $ T.pack (unPackageName pn))
                            ,("Version",\cell (Dependency _ vers) -> setCellRendererTextText cell $ T.pack $ display vers)])
         (dependencyEditor packages,
             paraHAlign <<<- ParaHAlign AlignFill
@@ -806,6 +818,9 @@ versionRangeEditor para noti = do
                     (\v -> (unionVersionRanges (thisVersion v) (laterVersion v), Just (Left (ThisOrLaterVersionS,v))))
                     (\v -> (unionVersionRanges (thisVersion v) (earlierVersion v), Just (Left (ThisOrEarlierVersionS,v))))
                     (\v1 v2 -> (withinVersion v1, Just (Left (WildcardVersionS,v1))))
+#if MIN_VERSION_Cabal(2,0,0)
+                    (\v1 v2 -> (majorBoundVersion v1, Just (Left (MajorBoundVersionS,v1))))
+#endif
                     (\(vr1, r1) (vr2, r2) -> (unionVersionRanges vr1 vr2, Just (Right (UnionVersionRangesS,vr1,vr2))))
                     (\(vr1, r1) (vr2, r2) -> (intersectVersionRanges vr1 vr2, Just (Right (IntersectVersionRangesS,vr1,vr2))))
                     id
@@ -815,6 +830,9 @@ versionRangeEditor para noti = do
                         Just Nothing -> return (Just anyVersion)
                         Just (Just (Left (ThisVersionS,v)))          -> return (Just (thisVersion v))
                         Just (Just (Left (WildcardVersionS,v)))      -> return (Just (withinVersion v))
+#if MIN_VERSION_Cabal(2,0,0)
+                        Just (Just (Left (MajorBoundVersionS,v)))    -> return (Just (majorBoundVersion v))
+#endif
                         Just (Just (Left (LaterVersionS,v)))         -> return (Just (laterVersion v))
                         Just (Just (Left (EarlierVersionS,v)))       -> return (Just (earlierVersion v))
 
@@ -826,14 +844,19 @@ versionRangeEditor para noti = do
                                                         -> return (Just (intersectVersionRanges v1 v2))
     return (wid,vrinj,vrext)
         where
-            v1 = [ThisVersionS,WildcardVersionS,LaterVersionS,ThisOrLaterVersionS,EarlierVersionS,ThisOrEarlierVersionS]
+            v1 = [ThisVersionS,WildcardVersionS
+#if MIN_VERSION_Cabal(2,0,0)
+                 ,MajorBoundVersionS
+#endif
+                 ,LaterVersionS,ThisOrLaterVersionS,EarlierVersionS,ThisOrEarlierVersionS]
             v2 = [UnionVersionRangesS,IntersectVersionRangesS]
 
-data Version1 = ThisVersionS | WildcardVersionS | LaterVersionS | ThisOrLaterVersionS | EarlierVersionS | ThisOrEarlierVersionS
+data Version1 = ThisVersionS | WildcardVersionS | MajorBoundVersionS | LaterVersionS | ThisOrLaterVersionS | EarlierVersionS | ThisOrEarlierVersionS
     deriving (Eq)
 instance Show Version1 where
     show ThisVersionS          = "This Version"
     show WildcardVersionS      = "Wildcard Version"
+    show MajorBoundVersionS    = "Major Bound Version"
     show LaterVersionS         = "Later Version"
     show ThisOrLaterVersionS   = "This or later Version"
     show EarlierVersionS       = "Earlier Version"
@@ -872,7 +895,7 @@ instance Default Dependency
     where getDefault = Dependency getDefault getDefault
 
 instance Default PackageName
-    where getDefault = PackageName getDefault
+    where getDefault = mkPackageName getDefault
 
 
 
