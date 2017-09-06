@@ -195,6 +195,7 @@ import GI.Gtk.Objects.MessageDialog
        (constructMessageDialogButtons, setMessageDialogMessageType)
 import GI.Gtk.Objects.Label (noLabel)
 import GI.Gtk.Objects.Widget (widgetSetTooltipText)
+import GHC.Stack (HasCallStack)
 
 -- import Debug.Trace (trace)
 trace (a::String) b = b
@@ -550,7 +551,7 @@ viewCollapse = do
     mbPanePath        <- getActivePanePath
     forM_ mbPanePath viewCollapse'
 
-viewCollapse' :: PaneMonad alpha => PanePath -> alpha ()
+viewCollapse' :: (HasCallStack, PaneMonad alpha) => PanePath -> alpha ()
 viewCollapse' panePath = trace "viewCollapse' called" $ do
     layout1           <- getLayoutSt
     case layoutFromPath panePath layout1 of
@@ -561,73 +562,81 @@ viewCollapse' panePath = trace "viewCollapse' called" $ do
             let mbOtherSidePath = otherSide panePath
             case mbOtherSidePath of
                 Nothing -> trace "ViewFrame>>viewCollapse': no other side path found: " return ()
-                Just otherSidePath -> do
-                    nbop <- getNotebookOrPaned otherSidePath return
-                    nb <- liftIO $ castTo Notebook nbop
-                    case nb of
+                Just otherSidePath ->
+                    getNotebookOrPaned otherSidePath (castTo Notebook) >>= \case
                         Nothing -> trace "ViewFrame>>viewCollapse': other side path not collapsedXX: " $
-                                case layoutFromPath otherSidePath layout1 of
-                                    VerticalP{}   -> do
-                                        viewCollapse' (otherSidePath ++ [SplitP LeftP])
-                                        viewCollapse' panePath
-                                    HorizontalP{} -> do
-                                        viewCollapse' (otherSidePath ++ [SplitP TopP])
-                                        viewCollapse' panePath
-                                    _ -> trace "ViewFrame>>viewCollapse': impossible1 " return ()
-                        Just otherSideNotebook -> do
-                            paneMap           <- getPaneMapSt
-                            activeNotebook    <- getNotebook' "viewCollapse' 1" panePath
-                            -- 1. Move panes and groups to one side (includes changes to paneMap and layout)
-                            let paneNamesToMove = map (\(w,(p,_)) -> w)
-                                                    $filter (\(w,(p,_)) -> otherSidePath == p)
-                                                        $Map.toList paneMap
-                            panesToMove       <- mapM paneFromName paneNamesToMove
-                            mapM_ (\(PaneC p) -> viewMoveTo panePath p) panesToMove
-                            let groupNames    =  map (\n -> groupPrefix <> n) $
-                                                        getGroupsFrom otherSidePath layout1
-                            mapM_ (\n -> move' (n,activeNotebook)) groupNames
-                            -- 2. Remove unused notebook from admin
-                            st <- getFrameState
-                            notebookPtr <- liftIO $ unsafeManagedPtrCastPtr otherSideNotebook
-                            let ! newMap = Map.delete notebookPtr (panePathFromNB st)
-                            setPanePathFromNB newMap
-                            -- 3. Remove one level and reparent notebook
-                            parent <- widgetGetParent activeNotebook >>= liftIO . unsafeCastTo Container . fromJust
-                            grandparent <- widgetGetParent parent >>= liftIO . unsafeCastTo Container . fromJust
-                            nbIndex <- liftIO $ castTo Notebook grandparent >>= \case
-                                            Just notebook -> notebookPageNum notebook parent
-                                            Nothing -> return (-1)
-                            containerRemove grandparent parent
-                            containerRemove parent activeNotebook
-                            if length panePath > 1
-                                then do
-                                    let lasPathElem = last newPanePath
-                                    case (lasPathElem, nbIndex) of
-                                        (SplitP dir, _) | dir == TopP || dir == LeftP -> do
-                                            paned <- liftIO $ unsafeCastTo Paned grandparent
-                                            panedPack1 paned activeNotebook True False
-                                        (SplitP dir, _) | dir == BottomP || dir == RightP -> do
-                                            paned <- liftIO $ unsafeCastTo Paned grandparent
-                                            panedPack2 paned activeNotebook True False
-                                        (GroupP group, n) | n >= 0 -> do
-                                            grandParentNotebook <- liftIO $ unsafeCastTo Notebook grandparent
-                                            label <- groupLabel group
-                                            notebookInsertPage grandParentNotebook activeNotebook (Just label) n
-                                            notebookSetCurrentPage grandParentNotebook n
-                                            return ()
-                                        _ -> error "collapse: Unable to find page index"
-                                    widgetSetName activeNotebook $panePathElementToWidgetName lasPathElem
-                                else do
-                                    box <- liftIO $ unsafeCastTo Box grandparent
-                                    boxPackStart box activeNotebook True True 0
-                                    boxReorderChild box activeNotebook 2
-                                    widgetSetName activeNotebook "root"
-                            -- 4. Change panePathFromNotebook
-                            adjustNotebooks panePath newPanePath
-                            -- 5. Change paneMap
-                            adjustPanes panePath newPanePath
-                            -- 6. Change layout
-                            adjustLayoutForCollapse panePath
+                            case layoutFromPath otherSidePath layout1 of
+                                VerticalP{}   -> do
+                                    viewCollapse' (otherSidePath ++ [SplitP LeftP])
+                                    viewCollapse' panePath
+                                HorizontalP{} -> do
+                                    viewCollapse' (otherSidePath ++ [SplitP TopP])
+                                    viewCollapse' panePath
+                                _ -> trace "ViewFrame>>viewCollapse': impossible1 " return ()
+                        Just otherSideNotebook ->
+                            getNotebookOrPaned panePath (castTo Notebook) >>= \case
+                                Nothing -> trace "ViewFrame>>viewCollapse': path not collapsedXX: " $
+                                        case layoutFromPath panePath layout1 of
+                                            VerticalP{}   -> do
+                                                viewCollapse' (panePath ++ [SplitP LeftP])
+                                                viewCollapse' panePath
+                                            HorizontalP{} -> do
+                                                viewCollapse' (panePath ++ [SplitP TopP])
+                                                viewCollapse' panePath
+                                            _ -> trace "ViewFrame>>viewCollapse': impossible1 " return ()
+                                Just activeNotebook -> do
+                                    paneMap           <- getPaneMapSt
+                                    -- 1. Move panes and groups to one side (includes changes to paneMap and layout)
+                                    let paneNamesToMove = map (\(w,(p,_)) -> w)
+                                                            $filter (\(w,(p,_)) -> otherSidePath == p)
+                                                                $Map.toList paneMap
+                                    panesToMove       <- mapM paneFromName paneNamesToMove
+                                    mapM_ (\(PaneC p) -> viewMoveTo panePath p) panesToMove
+                                    let groupNames    =  map (\n -> groupPrefix <> n) $
+                                                                getGroupsFrom otherSidePath layout1
+                                    mapM_ (\n -> move' (n,activeNotebook)) groupNames
+                                    -- 2. Remove unused notebook from admin
+                                    st <- getFrameState
+                                    notebookPtr <- liftIO $ unsafeManagedPtrCastPtr otherSideNotebook
+                                    let ! newMap = Map.delete notebookPtr (panePathFromNB st)
+                                    setPanePathFromNB newMap
+                                    -- 3. Remove one level and reparent notebook
+                                    parent <- widgetGetParent activeNotebook >>= liftIO . unsafeCastTo Container . fromJust
+                                    grandparent <- widgetGetParent parent >>= liftIO . unsafeCastTo Container . fromJust
+                                    nbIndex <- liftIO $ castTo Notebook grandparent >>= \case
+                                                    Just notebook -> notebookPageNum notebook parent
+                                                    Nothing -> return (-1)
+                                    containerRemove grandparent parent
+                                    containerRemove parent activeNotebook
+                                    if length panePath > 1
+                                        then do
+                                            let lasPathElem = last newPanePath
+                                            case (lasPathElem, nbIndex) of
+                                                (SplitP dir, _) | dir == TopP || dir == LeftP -> do
+                                                    paned <- liftIO $ unsafeCastTo Paned grandparent
+                                                    panedPack1 paned activeNotebook True False
+                                                (SplitP dir, _) | dir == BottomP || dir == RightP -> do
+                                                    paned <- liftIO $ unsafeCastTo Paned grandparent
+                                                    panedPack2 paned activeNotebook True False
+                                                (GroupP group, n) | n >= 0 -> do
+                                                    grandParentNotebook <- liftIO $ unsafeCastTo Notebook grandparent
+                                                    label <- groupLabel group
+                                                    notebookInsertPage grandParentNotebook activeNotebook (Just label) n
+                                                    notebookSetCurrentPage grandParentNotebook n
+                                                    return ()
+                                                _ -> error "collapse: Unable to find page index"
+                                            widgetSetName activeNotebook $panePathElementToWidgetName lasPathElem
+                                        else do
+                                            box <- liftIO $ unsafeCastTo Box grandparent
+                                            boxPackStart box activeNotebook True True 0
+                                            boxReorderChild box activeNotebook 2
+                                            widgetSetName activeNotebook "root"
+                                    -- 4. Change panePathFromNotebook
+                                    adjustNotebooks panePath newPanePath
+                                    -- 5. Change paneMap
+                                    adjustPanes panePath newPanePath
+                                    -- 6. Change layout
+                                    adjustLayoutForCollapse panePath
 
 getGroupsFrom :: PanePath -> PaneLayout -> [Text]
 getGroupsFrom path layout =
@@ -1133,11 +1142,10 @@ allGroupNames pl = Set.unions $ map getFunc (terminalsWithPanePath pl)
 -- | Get another pane path which points to the other side at the same level
 --
 otherSide :: PanePath -> Maybe PanePath
-otherSide []    =   Nothing
-otherSide p     =   let rp = reverse p
-                    in case head rp of
-                        SplitP d -> Just (reverse $ SplitP (otherDirection d) : tail rp)
-                        _        -> Nothing
+otherSide p =
+    case reverse p of
+        (SplitP d:rest) -> Just . reverse $ SplitP (otherDirection d) : rest
+        _               -> Nothing
 
 --
 -- | Get the opposite direction of a pane direction
@@ -1193,7 +1201,7 @@ getNotebookOrPaned p cf = do
 getNotebook :: PaneMonad alpha => PanePath -> alpha  Notebook
 getNotebook p = getNotebookOrPaned p (unsafeCastTo Notebook)
 
-getNotebook' :: PaneMonad alpha => Text -> PanePath -> alpha  Notebook
+getNotebook' :: (HasCallStack, PaneMonad alpha) => Text -> PanePath -> alpha  Notebook
 getNotebook' str p = getNotebookOrPaned p (unsafeCastTo Notebook)
 
 
