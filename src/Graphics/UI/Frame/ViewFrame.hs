@@ -85,6 +85,7 @@ module Graphics.UI.Frame.ViewFrame (
 ,   getPaneMapSt
 ,   getPanePrim
 ,   getPanes
+,   getMRUPanes
 
 -- * View Actions
 ,   bringPaneToFront
@@ -885,11 +886,10 @@ handleNotebookSwitch nb index =
 -- | If their are many possibilities choose the leftmost and topmost
 --
 viewMove :: PaneMonad beta => PaneDirection -> beta  ()
-viewMove direction = do
-    mbPane <- getActivePaneSt
-    case mbPane of
-        Nothing -> return ()
-        Just (paneName,_) -> do
+viewMove direction =
+    getActivePaneSt >>= \case
+        (Nothing, _) -> return ()
+        (Just (paneName,_),_) -> do
             (PaneC pane) <- paneFromName paneName
             mbPanePath <- getActivePanePath
             case mbPanePath of
@@ -1215,18 +1215,16 @@ getPaned p = getNotebookOrPaned p $ unsafeCastTo Paned
 -- | Get the path to the active pane
 --
 getActivePanePath :: PaneMonad alpha => alpha  (Maybe PanePath)
-getActivePanePath = do
-    mbPane   <- getActivePaneSt
-    case mbPane of
-        Nothing -> return Nothing
-        Just (paneName,_) -> do
+getActivePanePath =
+    getActivePaneSt >>= \case
+        (Nothing, _) -> return Nothing
+        (Just (paneName,_),_) -> do
             (pp,_)  <- guiPropertiesFromName paneName
             return (Just pp)
 
 getActivePanePathOrStandard :: PaneMonad alpha => StandardPath -> alpha  PanePath
-getActivePanePathOrStandard sp = do
-    mbApp <- getActivePanePath
-    case mbApp of
+getActivePanePathOrStandard sp =
+    getActivePanePath >>= \case
         Just app -> return app
         Nothing -> do
             layout <- getLayoutSt
@@ -1466,6 +1464,10 @@ getActivePane   = getActivePaneSt
 setActivePane   = setActivePaneSt
 getUiManager    = getUiManagerSt
 getWindows      = getWindowsSt
-getMainWindow   = liftM head getWindows
+getMainWindow   = head <$> getWindows
 getLayout       = getLayoutSt
+getMRUPanes     =
+    getActivePane >>= \case
+        (Nothing, mru) -> return mru
+        (Just (n, _), mru) -> return (n:mru)
 

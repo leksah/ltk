@@ -200,7 +200,7 @@ data FrameState delta = FrameState {
 ,   uiManager       ::  UIManager
 ,   panes           ::  Map PaneName (IDEPane delta)
 ,   paneMap         ::  Map PaneName (PanePath, Connections)
-,   activePane      ::  Maybe (PaneName, Connections)
+,   activePane      ::  (Maybe (PaneName, Connections), [PaneName])
 ,   panePathFromNB  ::  ! (Map (Ptr Notebook) PanePath)
 ,   layout          ::  PaneLayout}
     deriving Show
