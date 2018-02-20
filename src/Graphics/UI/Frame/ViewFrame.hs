@@ -241,15 +241,13 @@ addPaneAdmin pane conn pp = do
 
 getPanePrim ::  RecoverablePane alpha beta delta => delta (Maybe alpha)
 getPanePrim = do
-    selectedPanes <- getPanes
-    if null selectedPanes || length selectedPanes > 1
-        then return Nothing
-        else return (Just $ head selectedPanes)
+    panes <- getPanes
+    return $ case panes of
+        [p] -> Just p
+        _ -> Nothing
 
 getPanes ::  RecoverablePane alpha beta delta => delta [alpha]
-getPanes = do
-    panes' <- getPanesSt
-    return (mapMaybe (\ (PaneC p) -> cast p) (Map.elems panes'))
+getPanes = mapMaybe (\ (PaneC p) -> cast p) . Map.elems <$> getPanesSt
 
 notebookInsertOrdered :: PaneMonad alpha => (IsNotebook self, IsWidget child)
     => self
@@ -907,12 +905,10 @@ findMoveTarget :: PanePath -> PaneLayout -> PaneDirection -> Maybe PanePath
 findMoveTarget panePath layout direction=
     let oppositeDir          = otherDirection direction
         canMove []           = []
-        canMove reversedPath =
-            case head reversedPath of
-                SplitP d | d == oppositeDir
-                    -> SplitP direction : tail reversedPath
-                GroupP group -> []
-                _                     -> canMove (tail reversedPath)
+        canMove (SplitP d:rest) | d == oppositeDir
+                    = SplitP direction : rest
+        canMove (GroupP group:_) = []
+        canMove (_:rest) = canMove rest
         basePath = reverse (canMove $ reverse panePath)
     in case basePath of
         [] -> Nothing
