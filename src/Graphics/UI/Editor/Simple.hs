@@ -1,6 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE DeriveGeneric #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  Graphics.UI.Editor.Simple
@@ -38,6 +39,10 @@ module Graphics.UI.Editor.Simple (
 ,   imageEditor
 
 ,   okCancelFields
+
+,   Color(..)
+,   toGdkColor
+,   fromGdkColor
 ) where
 
 import Prelude ()
@@ -47,14 +52,15 @@ import Data.IORef
 import Data.List (elemIndex)
 import Data.Maybe
 import Data.Int (Int32)
+import Data.Aeson (ToJSON, FromJSON)
 import System.FilePath.Posix
+import GHC.Generics (Generic)
 
 import Graphics.UI.Utils
 import Graphics.UI.Editor.Parameters
 --import Graphics.UI.Editor.Basics
 import Graphics.UI.Editor.MakeEditor
 import Control.Event
-import MyMissing (allOf)
 import Unsafe.Coerce (unsafeCoerce)
 import Graphics.UI.Editor.Basics
        (GUIEvent(..), GUIEventSelector(..), propagateAsChanged,
@@ -114,9 +120,16 @@ import Data.GI.Gtk.ModelView.SeqStore
 import Data.GI.Gtk.ModelView.Types
        (treeSelectionGetSelectedRows', treePathGetIndices',
         treePathNewFromIndices', stringToTreePath)
-import GI.Gdk (keyvalName, getEventKeyKeyval, EventScroll)
+import GI.Gdk
+       (getRGBABlue, getRGBAGreen, getRGBARed, setRGBAAlpha, setRGBABlue,
+        setRGBAGreen, setRGBARed, newZeroRGBA, getColorBlue, getColorGreen,
+        getColorRed, setColorBlue, setColorGreen, setColorRed, RGBA,
+        keyvalName, getEventKeyKeyval, EventScroll)
 import GI.GObject (objectNew, signalStopEmissionByName)
-import Text.PrinterParser (Color(..), toGdkRGBA, fromGdkRGBA)
+import Data.Word (Word16)
+import Text.ParserCombinators.Parsec.Char (CharParser)
+import qualified GI.Gdk as Gdk (Color(..))
+import Data.GI.Base.Constructible (Constructible(..))
 
 -- ------------------------------------------------------------
 -- * Simple Editors
@@ -206,7 +219,7 @@ boolEditor2 label2 parameters notifier = do
 enumEditor :: forall alpha . (Show alpha, Enum alpha, Bounded alpha)  => [Text] -> Editor alpha
 enumEditor labels parameters notifier = do
     coreRef <- newIORef Nothing
-    let vals :: [alpha] =  allOf
+    let vals :: [alpha] = [minBound .. maxBound]
     mkEditor
         (\widget enumValue -> do
             core <- readIORef coreRef
@@ -821,6 +834,42 @@ fontEditor parameters notifier = do
                     return (Just (Just f)))
         parameters
         notifier
+
+data Color = Color Word16 Word16 Word16 deriving(Eq, Show, Generic)
+
+instance ToJSON Color
+instance FromJSON Color
+
+toGdkColor :: MonadIO m => Color -> m Gdk.Color
+toGdkColor (Color r g b) = do
+    c <- new Gdk.Color []
+    setColorRed   c r
+    setColorGreen c g
+    setColorBlue  c b
+    return c
+
+fromGdkColor :: MonadIO m => Gdk.Color -> m Color
+fromGdkColor c = do
+    r <- getColorRed c
+    g <- getColorGreen c
+    b <- getColorBlue c
+    return $ Color r g b
+
+toGdkRGBA :: MonadIO m => Color -> m RGBA
+toGdkRGBA (Color r g b) = do
+    c <- newZeroRGBA
+    setRGBARed   c (fromIntegral r / 65535)
+    setRGBAGreen c (fromIntegral g / 65535)
+    setRGBABlue  c (fromIntegral b / 65535)
+    setRGBAAlpha c 65535
+    return c
+
+fromGdkRGBA :: MonadIO m => RGBA -> m Color
+fromGdkRGBA c = do
+    r <- getRGBARed c
+    g <- getRGBAGreen c
+    b <- getRGBABlue c
+    return $ Color (round (r * 65535)) (round (g * 65535)) (round (b * 65535))
 
 --
 -- | Editor for color selection

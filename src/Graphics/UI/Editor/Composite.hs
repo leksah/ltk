@@ -40,7 +40,7 @@ import Data.Maybe
 import Data.Text (Text)
 import qualified Data.Text as T (pack, unpack, null)
 
-import Default
+import Data.Default (Default(..))
 import Control.Event
 import Graphics.UI.Utils
 import Graphics.UI.Editor.Parameters
@@ -61,7 +61,6 @@ import Distribution.Simple
      PackageIdentifier(..))
 import Distribution.Text (simpleParse, display)
 import Distribution.Package (pkgName)
-import MyMissing (forceJust)
 import Unsafe.Coerce (unsafeCoerce)
 import Debug.Trace (trace)
 import GI.Gtk
@@ -243,8 +242,8 @@ splitEditor (fstEd,fstPara) (sndEd,sndPara) parameters notifier = do
 -- | An editor with a subeditor which gets active, when a checkbox is selected
 -- or deselected (if the positive Argument is False)
 --
-maybeEditor :: Default beta => (Editor beta, Parameters) -> Bool -> Text -> Editor (Maybe beta)
-maybeEditor (childEdit, childParams) positive boolLabel parameters notifier = do
+maybeEditor :: beta -> (Editor beta, Parameters) -> Bool -> Text -> Editor (Maybe beta)
+maybeEditor initialValue (childEdit, childParams) positive boolLabel parameters notifier = do
     coreRef      <- newIORef Nothing
     childRef     <- newIORef Nothing
     notifierBool <- emptyNotifier
@@ -339,7 +338,7 @@ maybeEditor (childEdit, childParams) positive boolLabel parameters notifier = do
                                 unless (any (equalManagedPtr childWidget) children) $ do
                                     setPrimaryAlign grid childWidget AlignStart
                                     containerAdd grid childWidget
-                                inj2 getDefault
+                                inj2 initialValue
                                 widgetShowAll childWidget
                     Nothing -> return ()
                 return (event {gtkReturn=True})
@@ -362,8 +361,8 @@ maybeEditor (childEdit, childParams) positive boolLabel parameters notifier = do
 -- | An editor with a subeditor which gets active, when a checkbox is selected
 -- or grayed out (if the positive Argument is False)
 --
-disableEditor :: Default beta => (Editor beta, Parameters) -> Bool -> Text -> Editor (Bool,beta)
-disableEditor (childEdit, childParams) positive boolLabel parameters notifier = do
+disableEditor :: beta -> (Editor beta, Parameters) -> Bool -> Text -> Editor (Bool,beta)
+disableEditor defaultValue (childEdit, childParams) positive boolLabel parameters notifier = do
     coreRef      <- newIORef Nothing
     childRef     <- newIORef Nothing
     notifierBool <- emptyNotifier
@@ -474,7 +473,7 @@ disableEditor (childEdit, childParams) positive boolLabel parameters notifier = 
                                         (childWidget,inj2,_) <- getChildEditor childRef childEdit childParams cNoti
                                         setPrimaryAlign grid childWidget AlignStart
                                         containerAdd grid childWidget
-                                        inj2 getDefault
+                                        inj2 defaultValue
                                         widgetSetSensitive childWidget True
                     Nothing -> return ()
                 return (event {gtkReturn=True})
@@ -495,9 +494,9 @@ disableEditor (childEdit, childParams) positive boolLabel parameters notifier = 
 --
 -- | An editor with a subeditor which gets active, when a checkbox is selected
 -- or deselected (if the positive Argument is False)
-eitherOrEditor :: (Default alpha, Default beta) => (Editor alpha, Parameters) ->
+eitherOrEditor :: alpha -> beta -> (Editor alpha, Parameters) ->
                         (Editor beta, Parameters) -> Text -> Editor (Either alpha beta)
-eitherOrEditor (leftEditor,leftParams) (rightEditor,rightParams)
+eitherOrEditor alphaDefault betaDefault (leftEditor,leftParams) (rightEditor,rightParams)
             label2 parameters notifier = do
     coreRef <- newIORef Nothing
     noti1 <- emptyNotifier
@@ -526,12 +525,12 @@ eitherOrEditor (leftEditor,leftParams) (rightEditor,rightParams)
                         Left vl -> do
                           containerAdd grid leftFrame
                           inj2 vl
-                          inj3 getDefault
+                          inj3 betaDefault
                           inj1 True
                         Right vr  -> do
                           containerAdd grid rightFrame
                           inj3 vr
-                          inj2 getDefault
+                          inj2 alphaDefault
                           inj1 False
                     writeIORef coreRef (Just (be,le,re,grid))
                 Just ((_,inj1,_),(leftFrame,inj2,_),(rightFrame,inj3,_),grid) ->
@@ -540,13 +539,13 @@ eitherOrEditor (leftEditor,leftParams) (rightEditor,rightParams)
                               containerRemove grid rightFrame
                               containerAdd grid leftFrame
                               inj2 vl
-                              inj3 getDefault
+                              inj3 betaDefault
                               inj1 True
                             Right vr  -> do
                               containerRemove grid leftFrame
                               containerAdd grid rightFrame
                               inj3 vr
-                              inj2 getDefault
+                              inj2 alphaDefault
                               inj1 False)
         (do core <- readIORef coreRef
             case core of
@@ -596,13 +595,14 @@ data ColumnDescr row = ColumnDescr Bool [(Text, CellRendererText -> row -> IO ()
 
 --
 -- | An editor with a subeditor, of which a list of items can be selected
-multisetEditor :: (Show alpha, Default alpha, Eq alpha) => ColumnDescr alpha
+multisetEditor :: (Show alpha, Eq alpha) => alpha
+    -> ColumnDescr alpha
     -> (Editor alpha, Parameters)
     -> Maybe ([alpha] -> [alpha]) -- ^ The 'mbSort' arg, a sort function if desired
     -> Maybe (alpha -> alpha -> Bool) -- ^ The 'mbReplace' arg, a function which is a criteria for removing an
                               --   old entry when adding a new value
     -> Editor [alpha]
-multisetEditor (ColumnDescr showHeaders columnsDD) (singleEditor, sParams) mbSort mbReplace
+multisetEditor initialValue (ColumnDescr showHeaders columnsDD) (singleEditor, sParams) mbSort mbReplace
         parameters notifier = do
     coreRef <- newIORef Nothing
     cnoti   <- emptyNotifier
@@ -699,7 +699,7 @@ multisetEditor (ColumnDescr showHeaders columnsDD) (singleEditor, sParams) mbSor
                                 seqStoreRemove seqStore i
                             _ -> return ()
                     writeIORef coreRef (Just seqStore)
-                    injS getDefault
+                    injS initialValue
                 Just seqStore -> do
                     seqStoreClear seqStore
                     mapM_ (seqStoreAppend seqStore)
@@ -730,6 +730,7 @@ multisetEditor (ColumnDescr showHeaders columnsDD) (singleEditor, sParams) mbSor
 filesEditor :: Maybe FilePath -> FileChooserAction -> Text -> Editor [FilePath]
 filesEditor fp act label p =
     multisetEditor
+        ""
         (ColumnDescr False [("", \cell -> setCellRendererTextText cell . T.pack)])
         (fileEditor fp act label, emptyParams)
         (Just sort)
@@ -740,6 +741,7 @@ filesEditor fp act label p =
 textsEditor :: (Text -> Bool) -> Bool -> Editor [Text]
 textsEditor validation trimBlanks p =
     multisetEditor
+        ""
         (ColumnDescr False [("", setCellRendererTextText)])
         (textEditor validation trimBlanks, emptyParams)
         (Just sort)
@@ -766,6 +768,7 @@ dependencyEditor packages para noti = do
 dependenciesEditor :: [PackageIdentifier] -> Editor [Dependency]
 dependenciesEditor packages p =
     multisetEditor
+        def
         (ColumnDescr True [("Package",\cell (Dependency pn _) -> setCellRendererTextText cell $ T.pack (unPackageName pn))
                            ,("Version",\cell (Dependency _ vers) -> setCellRendererTextText cell $ T.pack $ display vers)])
         (dependencyEditor packages,
@@ -784,8 +787,8 @@ dependenciesEditor packages p =
 versionRangeEditor :: Editor VersionRange
 versionRangeEditor para noti = do
     (wid,inj,ext) <-
-        maybeEditor
-            (eitherOrEditor
+        maybeEditor (Left def)
+            (eitherOrEditor def def
                (pairEditor (comboSelectionEditor v1 (T.pack . show), emptyParams)
                   (versionEditor,
                    paraName <<<- ParaName "Enter Version" $ emptyParams),
@@ -880,22 +883,22 @@ versionEditor para noti = do
     return (wid, pinj, pext)
 
 instance Default Version1
-    where getDefault = ThisVersionS
+    where def = ThisVersionS
 
 instance Default Version2
-    where getDefault = UnionVersionRangesS
+    where def = UnionVersionRangesS
 
 instance Default Version
-    where getDefault = forceJust (simpleParse "0") "PackageEditor>>default version"
+    where def = fromJust (simpleParse "0")
 
 instance Default VersionRange
-    where getDefault = anyVersion
+    where def = anyVersion
 
 instance Default Dependency
-    where getDefault = Dependency getDefault getDefault
+    where def = Dependency def def
 
 instance Default PackageName
-    where getDefault = mkPackageName getDefault
+    where def = mkPackageName def
 
 
 

@@ -59,7 +59,6 @@ import qualified Data.Map as Map  (delete,insert,lookup,empty)
 import Data.Maybe (fromMaybe, isJust, fromJust)
 import Unsafe.Coerce (unsafeCoerce)
 import Control.Arrow (first)
-import MyMissing (allOf)
 import qualified Data.Text as T (pack)
 import GI.Gtk.Objects.Widget
        (afterWidgetKeyReleaseEvent, afterWidgetButtonReleaseEvent,
@@ -134,7 +133,7 @@ data GUIEventSelector = FocusOut        -- ^ generic, the widget looses the focu
 instance EventSelector GUIEventSelector
 
 allGUIEvents :: [GUIEventSelector]
-allGUIEvents = allOf
+allGUIEvents = [minBound .. maxBound]
 genericGUIEvents = [FocusOut,FocusIn,ButtonPressed,KeyPressed]
 
 -- ------------------------------------------------------------

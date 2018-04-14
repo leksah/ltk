@@ -2,6 +2,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveGeneric #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  IDE.Core.Panes
@@ -47,6 +48,8 @@ import Graphics.UI.Editor.Basics
 import Control.Monad.IO.Class (MonadIO(..), MonadIO)
 import Data.Text (Text)
 import Data.Monoid ((<>))
+import Data.Aeson (ToJSON, FromJSON)
+import GHC.Generics (Generic)
 import qualified Data.Text as T (pack)
 import Data.GI.Base.ManagedPtr (unsafeCastTo)
 import GI.Gtk.Objects.Widget (Widget(..))
@@ -70,13 +73,19 @@ type PanePath       =   [PanePathElement]
 -- | An element of a path to a pane
 --
 data PanePathElement = SplitP PaneDirection | GroupP Text
-    deriving (Eq,Show,Read)
+    deriving (Eq, Show, Read, Generic)
+
+instance ToJSON PanePathElement
+instance FromJSON PanePathElement
 
 --
 -- | The relative direction to a pane from the parent
 --
 data PaneDirection  =   TopP | BottomP | LeftP | RightP
-    deriving (Eq,Show,Read)
+    deriving (Eq, Show, Read, Generic)
+
+instance ToJSON PaneDirection
+instance FromJSON PaneDirection
 
 --
 -- | Description of a window layout
@@ -90,7 +99,10 @@ data PaneLayout =       HorizontalP PaneLayout PaneLayout Int
                             ,   currentPage  :: Int
                             ,   detachedId   :: Maybe Text
                             ,   detachedSize :: Maybe (Int, Int) }
-    deriving (Eq,Show,Read)
+    deriving (Eq, Show, Read, Generic)
+
+instance ToJSON PaneLayout
+instance FromJSON PaneLayout
 
 --
 -- | All kinds of panes are instances of pane

@@ -18,14 +18,11 @@ module Graphics.UI.Editor.DescriptionPP (
 ,   mkFieldPP
 ,   extractFieldDescription
 ,   flattenFieldDescriptionPP
-,   flattenFieldDescriptionPPToS
 ) where
 
 import Control.Monad
-import qualified Text.PrettyPrint.HughesPJ as PP
-import qualified Text.ParserCombinators.Parsec as P
+import Data.Aeson (FromJSON(..), ToJSON(..))
 
-import Text.PrinterParser hiding (fieldParser,parameters)
 import Graphics.UI.Editor.Parameters
 import Graphics.UI.Editor.MakeEditor
 --import IDE.Core.State
@@ -39,8 +36,6 @@ import GI.Gtk.Objects.Widget (Widget(..))
 
 data FieldDescriptionPP alpha gamma =  FDPP {
         parameters      ::  Parameters
-    ,   fieldPrinter    ::  alpha -> PP.Doc
-    ,   fieldParser     ::  alpha -> P.CharParser () alpha
     ,   fieldEditor     ::  alpha -> IO (Widget, Injector alpha , alpha -> Extractor alpha , Notifier)
     ,   applicator      ::  alpha -> alpha -> gamma ()}
     | VFDPP Parameters [FieldDescriptionPP alpha gamma]
@@ -49,8 +44,6 @@ data FieldDescriptionPP alpha gamma =  FDPP {
 
 type MkFieldDescriptionPP alpha beta gamma =
     Parameters      ->
-    Printer beta       ->
-    Parser beta        ->
     Getter alpha beta      ->
     Setter alpha beta      ->
     Editor beta        ->
@@ -58,21 +51,9 @@ type MkFieldDescriptionPP alpha beta gamma =
     FieldDescriptionPP alpha gamma
 
 mkFieldPP :: (Eq beta, Monad gamma) => MkFieldDescriptionPP alpha beta gamma
-mkFieldPP parameters printer parser getter setter editor applicator  =
+mkFieldPP parameters getter setter editor applicator  =
     let FD _ ed = mkField parameters getter setter editor
     in FDPP parameters
-        (\ dat -> (PP.text (case getParameterPrim paraName parameters of
-                                    Nothing -> ""
-                                    Just str -> T.unpack str) PP.<> PP.colon)
-                PP.$$ PP.nest 15 (printer (getter dat))
-                PP.$$ PP.nest 5 (case getParameterPrim paraSynopsis parameters of
-                                    Nothing -> PP.empty
-                                    Just str -> PP.text . T.unpack $ "--" <> str))
-        (\ dat -> P.try (do
-            symbol (fromMaybe "" (getParameterPrim paraName parameters))
-            colon
-            val <- parser
-            return (setter val dat)))
         ed
         (\ newDat oldDat -> do --applicator
             let newField = getter newDat
@@ -83,7 +64,7 @@ extractFieldDescription :: FieldDescriptionPP alpha gamma -> FieldDescription al
 extractFieldDescription (VFDPP paras descrs) =  VFD paras (map extractFieldDescription descrs)
 extractFieldDescription (HFDPP paras descrs) =  HFD paras (map extractFieldDescription descrs)
 extractFieldDescription (NFDPP descrsp)      =  NFD (map (A.second extractFieldDescription) descrsp)
-extractFieldDescription (FDPP parameters fieldPrinter fieldParser fieldEditor applicator) =
+extractFieldDescription (FDPP parameters fieldEditor applicator) =
     FD parameters fieldEditor
 
 flattenFieldDescriptionPP :: FieldDescriptionPP alpha gamma -> [FieldDescriptionPP alpha gamma]
@@ -91,11 +72,4 @@ flattenFieldDescriptionPP (VFDPP paras descrs)  =   concatMap flattenFieldDescri
 flattenFieldDescriptionPP (HFDPP paras descrs)  =   concatMap flattenFieldDescriptionPP descrs
 flattenFieldDescriptionPP (NFDPP descrsp)       =   concatMap (flattenFieldDescriptionPP . snd) descrsp
 flattenFieldDescriptionPP fdpp                  =   [fdpp]
-
-flattenFieldDescriptionPPToS :: FieldDescriptionPP alpha gamma -> [FieldDescriptionS alpha]
-flattenFieldDescriptionPPToS = map ppToS . flattenFieldDescriptionPP
-
-ppToS :: FieldDescriptionPP alpha gamma -> FieldDescriptionS alpha
-ppToS (FDPP para print pars _ _) = FDS para print pars
-ppToS _                          = error "DescriptionPP.ppToS Can't transform"
 

@@ -113,7 +113,6 @@ import Data.Text (Text)
 import Graphics.UI.Frame.Panes
 import Graphics.UI.Editor.Parameters
 import System.CPUTime (getCPUTime)
-import MyMissing (forceJust, forceHead)
 import Graphics.UI.Editor.MakeEditor
     (mkField, FieldDescription(..), buildEditor)
 import Graphics.UI.Editor.Simple (stringEditor, textEditor)
@@ -264,7 +263,7 @@ notebookInsertOrdered nb widget labelStr mbLabel mbTooltipText isGroup = do
     menuLabel   <-  labelNew (Just labelStr)
     numPages    <-  notebookGetNPages nb
     mbWidgets   <-  mapM (notebookGetNthPage nb) [0 .. (numPages-1)]
-    let widgets =   map (`forceJust` "ViewFrame.notebookInsertOrdered: no widget") mbWidgets
+    let widgets =   map (fromMaybe (error "ViewFrame.notebookInsertOrdered: no widget")) mbWidgets
     labelStrs   <-  mapM widgetGetName widgets
     let pos     =   fromMaybe (-1)
                       (findIndex
@@ -368,7 +367,9 @@ markLabel nb topWidget modified =
             Nothing -> return ()
             Just container -> do
                 children <- liftIO (unsafeCastTo Container container) >>= containerGetChildren
-                label <- liftIO . unsafeCastTo Label $ forceHead (tail children) "ViewFrame>>markLabel: empty children"
+                label <- liftIO . unsafeCastTo Label $ case children of
+                    (_:l:_) -> l
+                    _ -> error "ViewFrame>>markLabel: empty children"
                 text <- widgetGetName topWidget
                 labelSetUseMarkup label True
                 labelSetMarkup label
