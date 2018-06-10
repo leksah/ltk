@@ -1,6 +1,6 @@
 name: ltk
 version: 0.16.2.0
-cabal-version: >=1.8
+cabal-version: >=1.24
 build-type: Simple
 license: GPL
 license-file: LICENSE
@@ -80,9 +80,9 @@ library
         Graphics.UI.Frame.ViewFrame
         Graphics.UI.Utils
     build-depends:
-        Cabal >=1.6.0 && <2.1,
-        base >=4.0.0.0 && <4.11,
-        base-compat >=0.9.0 && <0.10,
+        Cabal >=1.24 && <2.3,
+        base >=4.0.0.0 && <4.12,
+        base-compat >=0.9.0 && <0.11,
         containers >=0.2 && <0.6,
         data-default >=0.7.1.1 && <0.8,
         filepath >=1.1.0 && <1.5,
