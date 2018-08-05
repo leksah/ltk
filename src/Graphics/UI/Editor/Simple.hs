@@ -68,7 +68,6 @@ import Graphics.UI.Editor.Basics
 import Control.Exception as E (catch, IOException)
 import Control.Monad.IO.Class (MonadIO(..))
 import qualified Data.Text as T (strip, unpack, pack, empty)
-import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.GI.Base (new', GObject(..), unsafeCastTo, nullToNothing)
 import GI.Gtk

@@ -35,7 +35,7 @@ import Prelude.Compat
 import Control.Monad (foldM, when)
 import Data.List (unzip4, intersperse)
 import Data.Text (Text)
-import Data.Monoid ((<>), mconcat)
+import Data.Monoid (mconcat)
 
 import Control.Event
 import Graphics.UI.Utils

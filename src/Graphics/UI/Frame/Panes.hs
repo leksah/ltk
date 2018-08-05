@@ -47,7 +47,6 @@ import Graphics.UI.Editor.Basics
        (Connection(..), Connection, Connections)
 import Control.Monad.IO.Class (MonadIO(..), MonadIO)
 import Data.Text (Text)
-import Data.Monoid ((<>))
 import Data.Aeson (ToJSON, FromJSON)
 import GHC.Generics (Generic)
 import qualified Data.Text as T (pack)

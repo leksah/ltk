@@ -126,7 +126,6 @@ import Control.Monad (unless, when, liftM, foldM)
 import Control.Applicative ((<$>))
 import qualified Control.Monad.Reader as Gtk (liftIO)
 import qualified Data.Text as T (pack, stripPrefix, unpack)
-import Data.Monoid ((<>))
 import Data.Foldable (forM_)
 import Control.Arrow (Arrow(..))
 import GI.Gtk
