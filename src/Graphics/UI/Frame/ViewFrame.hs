@@ -362,7 +362,7 @@ markLabel :: (MonadIO m, IsWidget alpha, IsNotebook beta) => beta -> alpha -> Bo
 markLabel nb topWidget modified =
     notebookGetTabLabel nb topWidget >>= \case
         Nothing  -> return ()
-        Just box -> liftIO (unsafeCastTo Bin box) >>= nullToNothing . binGetChild >>= \case
+        Just box -> liftIO (unsafeCastTo Bin box) >>= binGetChild >>= \case
             Nothing -> return ()
             Just container -> do
                 children <- liftIO (unsafeCastTo Container container) >>= containerGetChildren

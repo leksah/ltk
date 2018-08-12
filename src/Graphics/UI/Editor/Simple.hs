@@ -524,7 +524,7 @@ comboEntryEditor list parameters notifier = do
                     case ind of
                         Just i -> comboBoxSetActive combo (fromIntegral i)
                         Nothing -> do
-                            entry <- (fromJust <$> nullToNothing (binGetChild combo)) >>= unsafeCastTo Entry
+                            entry <- (fromJust <$> binGetChild combo) >>= unsafeCastTo Entry
                             entrySetText entry obj
                     writeIORef coreRef (Just combo)
                 Just combo -> do
@@ -536,7 +536,7 @@ comboEntryEditor list parameters notifier = do
             case core of
                 Nothing -> return Nothing
                 Just combo -> do
-                    entry <- (fromJust <$> nullToNothing (binGetChild combo)) >>= unsafeCastTo Entry
+                    entry <- (fromJust <$> binGetChild combo) >>= unsafeCastTo Entry
                     Just <$> entryGetText entry)
         parameters
         notifier

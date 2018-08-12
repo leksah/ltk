@@ -296,12 +296,12 @@ getRealWidget w = liftIO $ (
     castTo Bin w >>= \case
         Nothing -> return Nothing
         Just b  ->
-            (fromJust <$> nullToNothing (binGetChild b)) >>= castTo Bin >>= \case
+            (fromJust <$> binGetChild b) >>= castTo Bin >>= \case
                 Nothing -> return Nothing
                 Just f  ->
-                    (fromJust <$> nullToNothing (binGetChild f)) >>= castTo Bin >>= \case
+                    (fromJust <$> binGetChild f) >>= castTo Bin >>= \case
                         Nothing -> return Nothing
-                        Just ia -> nullToNothing (binGetChild ia)
+                        Just ia -> binGetChild ia
   ) `catch` (\UnexpectedNullPointerReturn {} -> return Nothing)
 
 
