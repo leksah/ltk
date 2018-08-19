@@ -1,17 +1,28 @@
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Graphics.UI.Utils (
     setPrimaryAlign
   , setSecondaryAlign
   , setPrimaryExpand
   , setSecondaryExpand
+  , fontDescriptionToCssProps
 ) where
 
+import Data.Text (Text)
+import qualified Data.Text as T (pack)
 import Control.Monad.IO.Class (MonadIO)
 import GI.Gtk
        (widgetSetVexpand, widgetSetHexpand, widgetSetValign,
         widgetSetHalign, orientableGetOrientation, Align, IsWidget,
         IsOrientable)
 import GI.Gtk.Enums (Orientation(..))
+import GI.Pango
+       (FontDescription, Variant(..), Style(..), FontMask(..),
+        fontDescriptionGetSetFields, fontDescriptionGetFamily,
+        fontDescriptionGetStyle, fontDescriptionGetVariant,
+        fontDescriptionGetWeight, fontDescriptionGetSize,
+        pattern SCALE)
 
 setPrimaryAlign :: (MonadIO m, IsOrientable parent, IsWidget child) => parent -> child -> Align -> m ()
 setPrimaryAlign parent child align =
@@ -37,3 +48,27 @@ setSecondaryExpand parent child expand =
         OrientationHorizontal -> widgetSetVexpand child expand
         OrientationVertical   -> widgetSetHexpand child expand
 
+fontDescriptionToCssProps :: MonadIO m => FontDescription -> m Text
+fontDescriptionToCssProps fd = do
+  mask <- fontDescriptionGetSetFields fd
+  let prop fm n | fm `elem` mask = (maybe "" (\f -> n <> ": " <> f <> "; ") <$>)
+                | otherwise      = const $ return ""
+      weight w = T.pack . show $ (fromEnum w + 50) `div` 100 * 100
+      style = \case
+          StyleNormal  -> Just "normal"
+          StyleItalic  -> Just "italic"
+          StyleOblique -> Just "obligue"
+          _ -> Nothing
+      variant = \case
+          VariantNormal    -> Just "normal"
+          VariantSmallCaps -> Just "small-caps"
+          _ -> Nothing
+  fontFamily  <- prop FontMaskFamily  "font-family"  $ fontDescriptionGetFamily fd
+  fontStyle   <- prop FontMaskStyle   "font-style"   $ style <$> fontDescriptionGetStyle fd
+  fontVariant <- prop FontMaskVariant "font-variant" $ variant <$> fontDescriptionGetVariant fd
+  fontWeight  <- prop FontMaskWeight  "font-weight"  $ Just . weight <$> fontDescriptionGetWeight fd
+  fontSize    <- prop FontMaskSize    "font-size"    $ Just . T.pack . show
+    .   (/ (fromIntegral SCALE :: Double))
+    .   fromIntegral
+    <$> fontDescriptionGetSize fd
+  return $ mconcat [fontFamily, fontStyle, fontVariant, fontWeight, fontSize]
