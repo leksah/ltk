@@ -11,6 +11,7 @@ module Graphics.UI.Utils (
 
 import Data.Text (Text)
 import qualified Data.Text as T (pack)
+import Data.Monoid ((<>))
 import Control.Monad.IO.Class (MonadIO)
 import GI.Gtk
        (widgetSetVexpand, widgetSetHexpand, widgetSetValign,
