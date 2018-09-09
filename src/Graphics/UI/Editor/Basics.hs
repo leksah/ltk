@@ -4,6 +4,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
+{-# OPTIONS_GHC -Wall #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  Graphics.UI.Editor.Basics
@@ -44,7 +45,6 @@ module Graphics.UI.Editor.Basics (
 
 import Prelude ()
 import Prelude.Compat
-import Text.Show
 
 import Data.Unique
 import Data.IORef
@@ -54,12 +54,10 @@ import Control.Monad.Trans (liftIO)
 
 import Graphics.UI.Editor.Parameters
 import Control.Event
-import Data.Map (Map(..))
+import Data.Map (Map)
 import qualified Data.Map as Map  (delete,insert,lookup,empty)
-import Data.Maybe (fromMaybe, isJust, fromJust)
-import Unsafe.Coerce (unsafeCoerce)
+import Data.Maybe (isJust, fromJust)
 import Control.Arrow (first)
-import qualified Data.Text as T (pack)
 import GI.Gtk.Objects.Widget
        (afterWidgetKeyReleaseEvent, afterWidgetButtonReleaseEvent,
         onWidgetFocusInEvent, onWidgetFocusOutEvent, widgetGetName,
@@ -69,11 +67,6 @@ import Data.GI.Base.Signals (SignalHandlerId)
 import Data.GI.Base.ManagedPtr (unsafeCastTo, castTo)
 import GI.Gtk.Objects.Button (onButtonClicked, Button(..))
 import Control.Monad.IO.Class (MonadIO)
-
-fromString = Just . T.pack
-
-ifThenElse True t _ = t
-ifThenElse _ _ f = f
 
 -- ---------------------------------------------------------------------
 -- * Basic Types
@@ -134,6 +127,7 @@ instance EventSelector GUIEventSelector
 
 allGUIEvents :: [GUIEventSelector]
 allGUIEvents = [minBound .. maxBound]
+genericGUIEvents :: [GUIEventSelector]
 genericGUIEvents = [FocusOut,FocusIn,ButtonPressed,KeyPressed]
 
 -- ------------------------------------------------------------
@@ -203,7 +197,7 @@ instance  EventSource Notifier GUIEvent IO GUIEventSelector where
         unique              <-  myUnique o
         newGer <- case Map.lookup eventSel ger of
                     Nothing -> return ger
-                    Just (_,([],um))  -> return ger
+                    Just (_,([],_um))  -> return ger
                     Just (cids,(notifiers,um))  -> do
                         lu <-  mapM (\es -> registerEvent es eventSel hand)
                                         notifiers
@@ -220,7 +214,7 @@ instance  EventSource Notifier GUIEvent IO GUIEventSelector where
         writeIORef pairRef (newHandlers,newGer)
         return (Just unique)
 
-    unregisterEvent o@(Noti pairRef) eventSel unique =   do
+    unregisterEvent (Noti pairRef) eventSel unique =   do
         (handlers, ger) <- readIORef pairRef
         newGer <- case Map.lookup eventSel ger of
             Nothing -> return ger
@@ -235,7 +229,7 @@ instance  EventSource Notifier GUIEvent IO GUIEventSelector where
                                 Nothing -> handlers
                                 Just l -> case filter (\ (mu,_) -> mu /= unique) l of
                                             [] -> Map.delete eventSel handlers
-                                            l  -> Map.insert eventSel l handlers
+                                            l'  -> Map.insert eventSel l' handlers
         writeIORef pairRef (newHandlers,newGer)
         return ()
 
@@ -261,7 +255,7 @@ propagateEvent (Noti pairRef) eventSources eventSel = do
         ->  Map GUIEventSelector GUIEventReg
         ->  (Unique, GUIEvent -> IO GUIEvent)
         ->  m (Map GUIEventSelector GUIEventReg)
-    repropagate eventSet ger (unique,hand) =
+    repropagate _eventSet ger (unique,hand) =
         case Map.lookup eventSel ger of
             Just (cids,(notifiers,um))
                 -> do
@@ -321,10 +315,6 @@ getStandardRegFunction ButtonPressed    =   \w h -> fmap (ConnectC w) $ unsafeCa
 getStandardRegFunction KeyPressed       =   \w h -> fmap (ConnectC w) $ unsafeCastTo Widget w >>= (`afterWidgetKeyReleaseEvent` const h)
 getStandardRegFunction Clicked          =   \w h -> fmap (ConnectC w) $ unsafeCastTo Button w >>= (`onButtonClicked` void h)
 getStandardRegFunction _    =   error "Basic>>getStandardRegFunction: no original GUI event"
-
-registerEvents :: EventSource alpha beta gamma delta => alpha -> [delta] -> (beta -> gamma beta) -> gamma [Maybe Unique]
-registerEvents notifier selectors handler =
-    mapM (\ s -> registerEvent notifier s handler) selectors
 
 propagateAsChanged
   :: (EventSource alpha GUIEvent m GUIEventSelector) =>

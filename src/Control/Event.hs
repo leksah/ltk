@@ -1,4 +1,5 @@
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
+{-# OPTIONS_GHC -Wall #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  Control.Event
@@ -21,6 +22,8 @@ module Control.Event (
 ,   registerEvents
 ) where
 
+import Prelude ()
+import Prelude.Compat
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Unique
@@ -62,7 +65,7 @@ class (Monad gamma, Event beta delta) => EventSource alpha beta gamma delta
                 let selector    =   getSelector e
                 case selector `Map.lookup` handlerMap of
                     Nothing     ->  return e
-                    Just l      ->  foldM (\e (_,ah) -> ah e) e (reverse l)
+                    Just l      ->  foldM (\e' (_,ah) -> ah e') e (reverse l)
             else error $ "Can't trigger event " ++ show (getSelector e)
 
     -- returns Unique if registration was successfull, else Nothing
@@ -96,4 +99,5 @@ class (Monad gamma, Event beta delta) => EventSource alpha beta gamma delta
             else error $ "Can't register event " ++ show e
 
 registerEvents :: EventSource alpha beta gamma delta => alpha -> [delta] -> (beta -> gamma beta) -> gamma [Unique]
-registerEvents o l handler = liftM catMaybes (mapM  (\ e -> registerEvent o e handler) l)
+registerEvents o l handler = catMaybes <$> mapM (\ e -> registerEvent o e handler) l
+

@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wall #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  Graphics.UI.Editor.Parameters
@@ -45,7 +46,6 @@ import Prelude ()
 import Prelude.Compat
 import Data.Maybe
 import Data.Text (Text)
-import qualified Data.List as List
 import GI.Gtk.Enums (Orientation(..), ResponseType, ShadowType(..))
 import GI.Gtk.Objects.Box (boxPackStart, IsBox, boxPackEnd)
 import Control.Monad.IO.Class (MonadIO)
@@ -56,9 +56,7 @@ import qualified Data.Text as T (Text)
 import GI.Gtk.Objects.Dialog
        (dialogResponse, dialogSetDefaultResponse, IsDialog, dialogRun,
         dialogAddButton)
-import GI.Gtk.Structs.TreePath
-       (treePathNew, TreePath(..))
-import GI.Gtk (Orientation(..), Align(..))
+import GI.Gtk (Align(..))
 
 data Packing = PackRepel | PackGrow | PackNatural deriving (Eq, Show)
 

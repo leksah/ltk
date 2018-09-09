@@ -1,6 +1,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wall #-}
 module Graphics.UI.Utils (
     setPrimaryAlign
   , setSecondaryAlign
@@ -9,6 +10,8 @@ module Graphics.UI.Utils (
   , fontDescriptionToCssProps
 ) where
 
+import Prelude ()
+import Prelude.Compat
 import Data.Text (Text)
 import qualified Data.Text as T (pack)
 import Data.Monoid ((<>))
@@ -30,24 +33,28 @@ setPrimaryAlign parent child align =
     orientableGetOrientation parent >>= \case
         OrientationHorizontal -> widgetSetHalign child align
         OrientationVertical   -> widgetSetValign child align
+        _ -> error "Invalid Orientation"
 
 setPrimaryExpand :: (MonadIO m, IsOrientable parent, IsWidget child) => parent -> child -> Bool -> m ()
 setPrimaryExpand parent child expand =
     orientableGetOrientation parent >>= \case
         OrientationHorizontal -> widgetSetHexpand child expand
         OrientationVertical   -> widgetSetVexpand child expand
+        _ -> error "Invalid Orientation"
 
 setSecondaryAlign :: (MonadIO m, IsOrientable parent, IsWidget child) => parent -> child -> Align -> m ()
 setSecondaryAlign parent child align =
     orientableGetOrientation parent >>= \case
         OrientationHorizontal -> widgetSetValign child align
         OrientationVertical   -> widgetSetHalign child align
+        _ -> error "Invalid Orientation"
 
 setSecondaryExpand :: (MonadIO m, IsOrientable parent, IsWidget child) => parent -> child -> Bool -> m ()
 setSecondaryExpand parent child expand =
     orientableGetOrientation parent >>= \case
         OrientationHorizontal -> widgetSetVexpand child expand
         OrientationVertical   -> widgetSetHexpand child expand
+        _ -> error "Invalid Orientation"
 
 fontDescriptionToCssProps :: MonadIO m => FontDescription -> m Text
 fontDescriptionToCssProps fd = do

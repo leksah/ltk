@@ -3,6 +3,7 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  IDE.Core.Panes
@@ -39,9 +40,7 @@ module Graphics.UI.Frame.Panes (
 import Prelude ()
 import Prelude.Compat
 import Control.Applicative (Applicative)
-import Data.Maybe
 import Data.Map (Map)
-import qualified Data.Map as Map
 import Data.Typeable
 import Graphics.UI.Editor.Basics
        (Connection(..), Connection, Connections)
@@ -120,7 +119,7 @@ class (Typeable alpha, PaneMonad delta) =>  Pane alpha delta | alpha -> delta  w
                             else primPaneName b <> " (" <> T.pack (show $ getAddedIndex b) <> ")"
 
     paneTooltipText :: alpha -> Maybe Text
-    paneTooltipText p = Nothing
+    paneTooltipText _p = Nothing
 
     getAddedIndex   ::   alpha -> Int
     getAddedIndex _ =   0

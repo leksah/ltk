@@ -1,5 +1,5 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
+{-# OPTIONS_GHC -Wall #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  IDE.Core.ViewFrame
@@ -28,38 +28,17 @@ module Graphics.UI.Frame.Rectangle (
 ,   getRectangleY
 ) where
 
+import Prelude ()
+import Prelude.Compat
 import Data.Int (Int32)
-import Data.GI.Base (new, AttrOp)
-import Data.GI.Base.Attributes (AttrOpTag(..))
+import Data.GI.Base (new)
 import Control.Monad.IO.Class (MonadIO)
-#ifdef MIN_VERSION_GDK_3_18
 import GI.Gdk (Rectangle(..), getRectangleWidth, getRectangleHeight, getRectangleX, getRectangleY,
                               setRectangleWidth, setRectangleHeight, setRectangleX, setRectangleY)
-#else
-import GI.Cairo (RectangleInt(..), getRectangleIntWidth, getRectangleIntHeight, getRectangleIntX, getRectangleIntY,
-                                   setRectangleIntWidth, setRectangleIntHeight, setRectangleIntX, setRectangleIntY)
-#endif
-
-#ifdef MIN_VERSION_GDK_3_18
-rectangle = Rectangle
-#else
-type Rectangle     = RectangleInt
-rectangle          = RectangleInt
-getRectangleWidth, getRectangleHeight, getRectangleX, getRectangleY :: MonadIO m => Rectangle -> m Int32
-getRectangleWidth  = getRectangleIntWidth
-getRectangleHeight = getRectangleIntHeight
-getRectangleX      = getRectangleIntX
-getRectangleY      = getRectangleIntY
-setRectangleWidth, setRectangleHeight, setRectangleX, setRectangleY :: MonadIO m => Rectangle -> Int32 -> m ()
-setRectangleWidth  = setRectangleIntWidth
-setRectangleHeight = setRectangleIntHeight
-setRectangleX      = setRectangleIntX
-setRectangleY      = setRectangleIntY
-#endif
 
 newRectangle :: MonadIO m => Int32 -> Int32 -> Int32 -> Int32 -> m Rectangle
 newRectangle x y width height = do
-    r <- new rectangle []
+    r <- new Rectangle []
     setRectangleX      r x
     setRectangleY      r y
     setRectangleWidth  r width

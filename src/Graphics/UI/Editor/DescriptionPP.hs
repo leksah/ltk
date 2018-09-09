@@ -1,4 +1,5 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# OPTIONS_GHC -Wall #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  Graphics.UI.Editor.DescriptionPP
@@ -20,17 +21,15 @@ module Graphics.UI.Editor.DescriptionPP (
 ,   flattenFieldDescriptionPP
 ) where
 
+import Prelude ()
+import Prelude.Compat
 import Control.Monad
-import Data.Aeson (FromJSON(..), ToJSON(..))
 
 import Graphics.UI.Editor.Parameters
-import Graphics.UI.Editor.MakeEditor
+import Graphics.UI.Editor.MakeEditor (FieldDescription(..), mkField)
 --import IDE.Core.State
-import Graphics.UI.Editor.Basics (Applicator(..),Editor(..),Setter(..),Getter(..),Notifier(..),Extractor(..),Injector(..))
-import qualified Data.Text as T (unpack)
-import Data.Monoid ((<>))
+import Graphics.UI.Editor.Basics (Applicator,Editor,Setter,Getter,Notifier(..),Extractor,Injector)
 import Data.Text (Text)
-import Data.Maybe (fromMaybe)
 import qualified Control.Arrow as A (Arrow(..))
 import GI.Gtk.Objects.Widget (Widget(..))
 
@@ -51,9 +50,9 @@ type MkFieldDescriptionPP alpha beta gamma =
     FieldDescriptionPP alpha gamma
 
 mkFieldPP :: (Eq beta, Monad gamma) => MkFieldDescriptionPP alpha beta gamma
-mkFieldPP parameters getter setter editor applicator  =
-    let FD _ ed = mkField parameters getter setter editor
-    in FDPP parameters
+mkFieldPP params getter setter editor applicator  =
+    let FD _ ed = mkField params getter setter editor
+    in FDPP params
         ed
         (\ newDat oldDat -> do --applicator
             let newField = getter newDat
@@ -64,12 +63,11 @@ extractFieldDescription :: FieldDescriptionPP alpha gamma -> FieldDescription al
 extractFieldDescription (VFDPP paras descrs) =  VFD paras (map extractFieldDescription descrs)
 extractFieldDescription (HFDPP paras descrs) =  HFD paras (map extractFieldDescription descrs)
 extractFieldDescription (NFDPP descrsp)      =  NFD (map (A.second extractFieldDescription) descrsp)
-extractFieldDescription (FDPP parameters fieldEditor applicator) =
-    FD parameters fieldEditor
+extractFieldDescription FDPP{..} = FD parameters fieldEditor
 
 flattenFieldDescriptionPP :: FieldDescriptionPP alpha gamma -> [FieldDescriptionPP alpha gamma]
-flattenFieldDescriptionPP (VFDPP paras descrs)  =   concatMap flattenFieldDescriptionPP descrs
-flattenFieldDescriptionPP (HFDPP paras descrs)  =   concatMap flattenFieldDescriptionPP descrs
+flattenFieldDescriptionPP (VFDPP _paras descrs)  =   concatMap flattenFieldDescriptionPP descrs
+flattenFieldDescriptionPP (HFDPP _paras descrs)  =   concatMap flattenFieldDescriptionPP descrs
 flattenFieldDescriptionPP (NFDPP descrsp)       =   concatMap (flattenFieldDescriptionPP . snd) descrsp
 flattenFieldDescriptionPP fdpp                  =   [fdpp]
 

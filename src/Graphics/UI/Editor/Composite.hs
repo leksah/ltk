@@ -1,6 +1,7 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE LambdaCase #-}
+{-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  Graphics.UI.Editor.Composite
@@ -34,11 +35,13 @@ module Graphics.UI.Editor.Composite (
 ,   dependenciesEditor
 ) where
 
+import Prelude ()
+import Prelude.Compat
 import Control.Monad
 import Data.IORef
 import Data.Maybe
 import Data.Text (Text)
-import qualified Data.Text as T (pack, unpack, null)
+import qualified Data.Text as T (pack, unpack)
 
 import Data.Default (Default(..))
 import Control.Event
@@ -52,79 +55,64 @@ import Distribution.Simple
     (orEarlierVersion,
      orLaterVersion,
      VersionRange,
-     PackageName(..),
+     PackageName,
      Dependency(..),
-#if MIN_VERSION_Cabal(2,0,0)
      unPackageName,
      mkPackageName,
-#endif
      PackageIdentifier(..))
 import Distribution.Text (simpleParse, display)
 import Distribution.Package (pkgName)
-import Unsafe.Coerce (unsafeCoerce)
-import Debug.Trace (trace)
 import GI.Gtk
        (gridSetRowSpacing, gridSetColumnSpacing, orientableSetOrientation,
-        widgetSetHexpand, widgetSetVexpand, toWidget, buttonBoxNew,
-        noWidget, widgetSetValign, widgetSetHalign, panedNew, gridNew,
-        setCellRendererTextText, noTreeViewColumn, noAdjustment,
-        FileChooserAction, treeModelGetPath, treeSelectionGetSelected,
-        treeViewScrollToCell, treeViewGetColumn, treeSelectionSelectPath,
-        onButtonClicked, onTreeSelectionChanged, treeViewSetHeadersVisible,
-        cellLayoutPackStart, cellRendererTextNew, treeViewAppendColumn,
+        buttonBoxNew, panedNew, gridNew, setCellRendererTextText,
+        noTreeViewColumn, noAdjustment, FileChooserAction,
+        treeModelGetPath, treeSelectionGetSelected, treeViewScrollToCell,
+        treeSelectionSelectPath, onButtonClicked, onTreeSelectionChanged,
+        treeViewSetHeadersVisible, cellLayoutPackStart,
+        cellRendererTextNew, treeViewAppendColumn,
         treeViewColumnSetResizable, treeViewColumnSetTitle,
         treeViewColumnNew, treeSelectionSetMode, treeViewGetSelection,
         scrolledWindowSetMinContentHeight, scrolledWindowSetPolicy,
         scrolledWindowNew, widgetSetSizeRequest, treeViewNewWithModel,
         afterTreeModelRowDeleted, afterTreeModelRowInserted,
-        buttonNewWithLabel, hButtonBoxNew, ButtonBox(..), vButtonBoxNew,
-        CellRendererText, containerRemove, widgetSetSensitive,
-        containerGetChildren, widgetHide, widgetShowAll, boxPackEnd,
-        panedPack2, panedPack1, hPanedNew, Paned(..), vPanedNew,
-        containerAdd, boxPackStart, vBoxNew, Box(..), hBoxNew, Widget(..))
-import Data.GI.Base.ManagedPtr (unsafeCastTo, castTo)
+        buttonNewWithLabel, CellRendererText, containerRemove,
+        widgetSetSensitive, containerGetChildren, widgetHide,
+        widgetShowAll, panedPack2, panedPack1, containerAdd, Widget(..))
 import GI.Gtk.Enums
-       (Orientation(..), PositionType(..), Align(..), ShadowType(..),
+       (Orientation(..), Align(..), ShadowType(..),
         SelectionMode(..), PolicyType(..))
 import Data.GI.Gtk.ModelView.CellLayout
        (cellLayoutSetDataFunction)
 import Data.GI.Gtk.ModelView.SeqStore
        (seqStoreAppend, seqStoreClear, seqStoreNew, seqStoreGetValue,
-        seqStoreRemove, seqStoreToList, SeqStore(..))
+        seqStoreRemove, seqStoreToList)
 import Data.GI.Gtk.ModelView.Types
        (treePathNewFromIndices', equalManagedPtr)
 import GI.Gtk.Structs.TreePath (treePathGetIndices)
 import Distribution.Version
-       (Version(..),
-#if MIN_VERSION_Cabal(2,0,0)
-        majorBoundVersion,
-#endif
+       (Version, majorBoundVersion,
         withinVersion, intersectVersionRanges, unionVersionRanges,
         earlierVersion, laterVersion, thisVersion, anyVersion,
         foldVersionRange')
-
-#if !MIN_VERSION_Cabal(2,0,0)
-mkPackageName = PackageName
-#endif
 
 --
 -- | An editor which composes two subeditors
 --
 pairEditor :: (Editor alpha, Parameters) -> (Editor beta, Parameters) -> Editor (alpha,beta)
-pairEditor (fstEd,fstPara) (sndEd,sndPara) parameters notifier = do
+pairEditor (fstEd,fstPara) (sndEd,sndPara) params notifier = do
     coreRef <- newIORef Nothing
     noti1   <- emptyNotifier
     noti2   <- emptyNotifier
     mapM_ (propagateEvent notifier [noti1,noti2]) allGUIEvents
-    fst@(fstFrame,inj1,ext1) <- fstEd fstPara noti1
-    snd@(sndFrame,inj2,ext2) <- sndEd sndPara noti2
+    fst'@(fstFrame,inj1,_ext1) <- fstEd fstPara noti1
+    snd'@(sndFrame,inj2,_ext2) <- sndEd sndPara noti2
     mkEditor
         (\widget (v1,v2) -> do
             core <- readIORef coreRef
             case core of
                 Nothing  -> do
                     grid <- gridNew
-                    orientableSetOrientation grid $ getParameter paraOrientation parameters
+                    orientableSetOrientation grid $ getParameter paraOrientation params
                     gridSetColumnSpacing grid 1
                     gridSetRowSpacing grid 1
                     setPrimaryExpand grid fstFrame True
@@ -134,10 +122,10 @@ pairEditor (fstEd,fstPara) (sndEd,sndPara) parameters notifier = do
                     containerAdd widget grid
                     inj1 v1
                     inj2 v2
-                    writeIORef coreRef (Just (fst,snd))
-                Just ((_,inj1,_),(_,inj2,_)) -> do
-                    inj1 v1
-                    inj2 v2)
+                    writeIORef coreRef (Just (fst',snd'))
+                Just ((_,inj1',_),(_,inj2',_)) -> do
+                    inj1' v1
+                    inj2' v2)
         (do core <- readIORef coreRef
             case core of
                 Nothing -> return Nothing
@@ -147,29 +135,29 @@ pairEditor (fstEd,fstPara) (sndEd,sndPara) parameters notifier = do
                     if isJust r1 && isJust r2
                         then return (Just (fromJust r1,fromJust r2))
                         else return Nothing)
-        parameters
+        params
         notifier
 
 tupel3Editor :: (Editor alpha, Parameters)
     -> (Editor beta, Parameters)
     -> (Editor gamma, Parameters)
     -> Editor (alpha,beta,gamma)
-tupel3Editor p1 p2 p3 parameters notifier = do
+tupel3Editor p1 p2 p3 params notifier = do
     coreRef <- newIORef Nothing
     noti1   <- emptyNotifier
     noti2   <- emptyNotifier
     noti3   <- emptyNotifier
     mapM_ (propagateEvent notifier [noti1,noti2,noti3]) (Clicked : allGUIEvents)
-    r1@(frame1,inj1,ext1) <- fst p1 (snd p1) noti1
-    r2@(frame2,inj2,ext2) <- fst p2 (snd p2) noti2
-    r3@(frame3,inj3,ext3) <- fst p3 (snd p3) noti3
+    r1@(frame1,inj1,_ext1) <- fst p1 (snd p1) noti1
+    r2@(frame2,inj2,_ext2) <- fst p2 (snd p2) noti2
+    r3@(frame3,inj3,_ext3) <- fst p3 (snd p3) noti3
     mkEditor
         (\widget (v1,v2,v3) -> do
             core <- readIORef coreRef
             case core of
                 Nothing  -> do
                     grid <- gridNew
-                    orientableSetOrientation grid $ getParameter paraOrientation parameters
+                    orientableSetOrientation grid $ getParameter paraOrientation params
                     setPrimaryExpand grid frame1 True
                     containerAdd grid frame1
                     setPrimaryExpand grid frame2 True
@@ -181,51 +169,52 @@ tupel3Editor p1 p2 p3 parameters notifier = do
                     inj2 v2
                     inj3 v3
                     writeIORef coreRef (Just (r1,r2,r3))
-                Just ((_,inj1,_),(_,inj2,_),(_,inj3,_)) -> do
-                    inj1 v1
-                    inj2 v2
-                    inj3 v3)
+                Just ((_,inj1',_),(_,inj2',_),(_,inj3',_)) -> do
+                    inj1' v1
+                    inj2' v2
+                    inj3' v3)
         (do core <- readIORef coreRef
             case core of
                 Nothing -> return Nothing
                 Just ((_,_,ext1),(_,_,ext2),(_,_,ext3)) -> do
-                    r1 <- ext1
-                    r2 <- ext2
-                    r3 <- ext3
-                    if isJust r1 && isJust r2 && isJust r3
-                        then return (Just (fromJust r1,fromJust r2, fromJust r3))
+                    r1' <- ext1
+                    r2' <- ext2
+                    r3' <- ext3
+                    if isJust r1' && isJust r2' && isJust r3'
+                        then return (Just (fromJust r1',fromJust r2', fromJust r3'))
                         else return Nothing)
-        parameters
+        params
         notifier
 
 --
 -- | Like a pair editor, but with a moveable split
 --
 splitEditor :: (Editor alpha, Parameters) -> (Editor beta, Parameters) -> Editor (alpha,beta)
-splitEditor (fstEd,fstPara) (sndEd,sndPara) parameters notifier = do
+splitEditor (fstEd,fstPara) (sndEd,sndPara) params notifier = do
     coreRef <- newIORef Nothing
     noti1   <- emptyNotifier
     noti2   <- emptyNotifier
     mapM_ (propagateEvent notifier [noti1,noti2]) allGUIEvents
-    fst@(fstFrame,inj1,ext1) <- fstEd fstPara noti1
-    snd@(sndFrame,inj2,ext2) <- sndEd sndPara noti2
+    fst'@(fstFrame,inj1,_ext1) <- fstEd fstPara noti1
+    snd'@(sndFrame,inj2,_ext2) <- sndEd sndPara noti2
     mkEditor
         (\widget (v1,v2) -> do
             core <- readIORef coreRef
             case core of
                 Nothing  -> do
-                    paned <- panedNew $ case getParameter paraOrientation parameters of
+                    paned <- panedNew $ case getParameter paraOrientation params of
                         OrientationHorizontal -> OrientationVertical
                         OrientationVertical   -> OrientationHorizontal
+                        _ -> error "Invalid Orientation"
                     panedPack1 paned fstFrame True True
                     panedPack2 paned sndFrame True True
                     containerAdd widget paned
                     inj1 v1
                     inj2 v2
-                    writeIORef coreRef (Just (fst,snd))
-                Just ((_,inj1,_),(_,inj2,_)) -> do
-                    inj1 v1
-                    inj2 v2)
+                    writeIORef coreRef (Just (fst', snd'))
+                Just ((_,inj1',_),(_,inj2',_)) -> do
+                    inj1' v1
+                    inj2' v2)
         (do core <- readIORef coreRef
             case core of
                 Nothing -> return Nothing
@@ -235,7 +224,7 @@ splitEditor (fstEd,fstPara) (sndEd,sndPara) parameters notifier = do
                     if isJust r1 && isJust r2
                         then return (Just (fromJust r1,fromJust r2))
                         else return Nothing)
-        parameters
+        params
         notifier
 
 --
@@ -243,7 +232,7 @@ splitEditor (fstEd,fstPara) (sndEd,sndPara) parameters notifier = do
 -- or deselected (if the positive Argument is False)
 --
 maybeEditor :: beta -> (Editor beta, Parameters) -> Bool -> Text -> Editor (Maybe beta)
-maybeEditor initialValue (childEdit, childParams) positive boolLabel parameters notifier = do
+maybeEditor initialValue (childEdit, childParams) positive boolLabel params notifier = do
     coreRef      <- newIORef Nothing
     childRef     <- newIORef Nothing
     notifierBool <- emptyNotifier
@@ -254,28 +243,28 @@ maybeEditor initialValue (childEdit, childParams) positive boolLabel parameters 
             case core of
                 Nothing  -> do
                     grid <- gridNew
-                    orientableSetOrientation grid $ getParameter paraOrientation parameters
+                    orientableSetOrientation grid $ getParameter paraOrientation params
                     gridSetColumnSpacing grid 1
                     gridSetRowSpacing grid 1
-                    be@(boolFrame,inj1,ext1) <- boolEditor
+                    be@(boolFrame,inj1,_ext1) <- boolEditor
                         (paraName <<<- ParaName boolLabel $ emptyParams)
                         notifierBool
                     setPrimaryAlign grid boolFrame AlignStart
                     containerAdd grid boolFrame
                     containerAdd widget grid
-                    registerEvent notifierBool Clicked (onClickedHandler widget coreRef childRef cNoti)
+                    _ <- registerEvent notifierBool Clicked (onClickedHandler widget coreRef childRef cNoti)
                     propagateEvent notifier [notifierBool] MayHaveChanged
                     case mbVal of
                         Nothing -> inj1 (not positive)
                         Just val -> do
-                            (childWidget,inj2,ext2) <- getChildEditor childRef childEdit childParams cNoti
+                            (childWidget,inj2,_ext2) <- getChildEditor childRef childEdit childParams cNoti
                             setPrimaryExpand grid childWidget True
                             containerAdd grid childWidget
                             widgetShowAll childWidget
                             inj1 positive
                             inj2 val
                     writeIORef coreRef (Just (be,grid))
-                Just (be@(boolFrame,inj1,extt),grid) -> do
+                Just ((_boolFrame,inj1,_extt),grid) -> do
                     hasChild <- hasChildEditor childRef
                     case mbVal of
                         Nothing ->
@@ -303,25 +292,24 @@ maybeEditor initialValue (childEdit, childParams) positive boolLabel parameters 
             core <- readIORef coreRef
             case core of
                 Nothing  -> return Nothing
-                Just (be@(boolFrame,inj1,ext1),_) -> do
+                Just ((_boolFrame,_inj1,ext1),_) -> do
                     bool <- ext1
                     case bool of
                         Nothing -> return Nothing
                         Just bv | bv == positive -> do
                             (_,_,ext2) <- getChildEditor childRef childEdit childParams cNoti
-                            value <- ext2
-                            case value of
+                            ext2 >>= \case
                                 Nothing -> return Nothing
                                 Just value -> return (Just (Just value))
                         _ -> return (Just Nothing))
-        parameters
+        params
         notifier
     where
-    onClickedHandler widget coreRef childRef cNoti event = do
+    onClickedHandler _widget coreRef childRef cNoti event = do
         core <- readIORef coreRef
         case core of
             Nothing  -> error "Impossible"
-            Just (be@(boolFrame,inj1,ext1),grid) -> do
+            Just ((_boolFrame,_inj1,ext1),grid) -> do
                 mbBool <- ext1
                 case mbBool of
                     Just bool ->
@@ -332,8 +320,8 @@ maybeEditor initialValue (childEdit, childParams) positive boolLabel parameters 
                                     (childWidget,_,_) <- getChildEditor childRef childEdit childParams cNoti
                                     widgetHide childWidget
                             else do
-                                hasChild <- hasChildEditor childRef
-                                (childWidget,inj2,ext2) <- getChildEditor childRef childEdit childParams cNoti
+                                _hasChild <- hasChildEditor childRef
+                                (childWidget,inj2,_ext2) <- getChildEditor childRef childEdit childParams cNoti
                                 children <- containerGetChildren grid
                                 unless (any (equalManagedPtr childWidget) children) $ do
                                     setPrimaryAlign grid childWidget AlignStart
@@ -342,12 +330,11 @@ maybeEditor initialValue (childEdit, childParams) positive boolLabel parameters 
                                 widgetShowAll childWidget
                     Nothing -> return ()
                 return (event {gtkReturn=True})
-    getChildEditor childRef childEditor childParams cNoti =  do
+    getChildEditor childRef childEditor _childParams cNoti =  do
         mb <- readIORef childRef
         case mb of
             Just editor -> return editor
             Nothing -> do
-                let val = childEditor
                 editor@(_,_,_) <- childEditor childParams cNoti
                 mapM_ (propagateEvent notifier [cNoti]) allGUIEvents
                 writeIORef childRef (Just editor)
@@ -362,7 +349,7 @@ maybeEditor initialValue (childEdit, childParams) positive boolLabel parameters 
 -- or grayed out (if the positive Argument is False)
 --
 disableEditor :: beta -> (Editor beta, Parameters) -> Bool -> Text -> Editor (Bool,beta)
-disableEditor defaultValue (childEdit, childParams) positive boolLabel parameters notifier = do
+disableEditor defaultValue (childEdit, childParams) positive boolLabel params notifier = do
     coreRef      <- newIORef Nothing
     childRef     <- newIORef Nothing
     notifierBool <- emptyNotifier
@@ -373,19 +360,19 @@ disableEditor defaultValue (childEdit, childParams) positive boolLabel parameter
             case core of
                 Nothing  -> do
                     grid <- gridNew
-                    orientableSetOrientation grid $ getParameter paraOrientation parameters
-                    be@(boolFrame,inj1,ext1) <- boolEditor
+                    orientableSetOrientation grid $ getParameter paraOrientation params
+                    be@(boolFrame,inj1,_ext1) <- boolEditor
                         (paraName <<<- ParaName boolLabel $ emptyParams)
                         notifierBool
                     setPrimaryAlign grid boolFrame AlignStart
                     containerAdd grid boolFrame
                     containerAdd widget grid
-                    registerEvent notifierBool Clicked
+                    _ <- registerEvent notifierBool Clicked
                         (onClickedHandler widget coreRef childRef cNoti)
                     propagateEvent notifier [notifierBool] MayHaveChanged
                     case mbVal of
                         (False,val) -> do
-                            (childWidget,inj2,ext2) <- getChildEditor childRef childEdit childParams cNoti
+                            (childWidget,inj2,_ext2) <- getChildEditor childRef childEdit childParams cNoti
                             setPrimaryExpand grid childWidget True
                             containerAdd grid childWidget
                             widgetShowAll childWidget
@@ -393,7 +380,7 @@ disableEditor defaultValue (childEdit, childParams) positive boolLabel parameter
                             inj2 val
                             widgetSetSensitive childWidget False
                         (True,val) -> do
-                            (childWidget,inj2,ext2) <- getChildEditor childRef childEdit childParams cNoti
+                            (childWidget,inj2,_ext2) <- getChildEditor childRef childEdit childParams cNoti
                             setPrimaryExpand grid childWidget True
                             containerAdd grid childWidget
                             widgetShowAll childWidget
@@ -401,10 +388,10 @@ disableEditor defaultValue (childEdit, childParams) positive boolLabel parameter
                             inj2 val
                             widgetSetSensitive childWidget True
                     writeIORef coreRef (Just (be,grid))
-                Just (be@(boolFrame,inj1,extt),grid) -> do
+                Just ((_boolFrame,inj1,_extt),grid) -> do
                     hasChild <- hasChildEditor childRef
                     case mbVal of
-                        (False,val) ->
+                        (False,_val) ->
                             if hasChild
                                 then do
                                     (childWidget,_,_) <- getChildEditor childRef childEdit childParams cNoti
@@ -429,30 +416,28 @@ disableEditor defaultValue (childEdit, childParams) positive boolLabel parameter
             core <- readIORef coreRef
             case core of
                 Nothing  -> return Nothing
-                Just (be@(boolFrame,inj1,ext1),_) -> do
+                Just ((_boolFrame,_inj1,ext1),_) -> do
                     bool <- ext1
                     case bool of
                         Nothing -> return Nothing
                         Just bv | bv == positive -> do
                             (_,_,ext2) <- getChildEditor childRef childEdit childParams cNoti
-                            value <- ext2
-                            case value of
+                            ext2 >>= \case
                                 Nothing -> return Nothing
                                 Just value -> return (Just (True, value))
                         _ -> do
                             (_,_,ext2) <- getChildEditor childRef childEdit childParams cNoti
-                            value <- ext2
-                            case value of
+                            ext2 >>= \case
                                 Nothing -> return Nothing
                                 Just value -> return (Just (False, value)))
-        parameters
+        params
         notifier
     where
-    onClickedHandler widget coreRef childRef cNoti event = do
+    onClickedHandler _widget coreRef childRef cNoti event = do
         core <- readIORef coreRef
         case core of
             Nothing  -> error "Impossible"
-            Just (be@(boolFrame,inj1,ext1),grid) -> do
+            Just ((_boolFrame,_inj1,ext1),grid) -> do
                 mbBool <- ext1
                 case mbBool of
                     Just bool ->
@@ -477,13 +462,12 @@ disableEditor defaultValue (childEdit, childParams) positive boolLabel parameter
                                         widgetSetSensitive childWidget True
                     Nothing -> return ()
                 return (event {gtkReturn=True})
-    getChildEditor childRef childEditor childParams cNoti =  do
+    getChildEditor childRef childEditor childParams' cNoti =  do
         mb <- readIORef childRef
         case mb of
             Just editor -> return editor
             Nothing -> do
-                let val = childEditor
-                editor@(_,_,_) <- childEditor childParams cNoti
+                editor@(_,_,_) <- childEditor childParams' cNoti
                 mapM_ (propagateEvent notifier [cNoti]) allGUIEvents
                 writeIORef childRef (Just editor)
                 return editor
@@ -497,23 +481,23 @@ disableEditor defaultValue (childEdit, childParams) positive boolLabel parameter
 eitherOrEditor :: alpha -> beta -> (Editor alpha, Parameters) ->
                         (Editor beta, Parameters) -> Text -> Editor (Either alpha beta)
 eitherOrEditor alphaDefault betaDefault (leftEditor,leftParams) (rightEditor,rightParams)
-            label2 parameters notifier = do
+            _label2 params notifier = do
     coreRef <- newIORef Nothing
     noti1 <- emptyNotifier
     noti2 <- emptyNotifier
     noti3 <- emptyNotifier
     mapM_ (propagateEvent notifier [noti1,noti2,noti3]) allGUIEvents
-    be@(boolFrame,inj1,ext1) <- boolEditor2  (getParameter paraName rightParams) leftParams noti1
-    le@(leftFrame,inj2,ext2) <- leftEditor (paraName <<<- ParaName "" $ leftParams) noti2
-    re@(rightFrame,inj3,ext3) <- rightEditor (paraName <<<- ParaName "" $ rightParams) noti3
+    be@(boolFrame,inj1,_ext1) <- boolEditor2  (getParameter paraName rightParams) leftParams noti1
+    le@(leftFrame,inj2,_ext2) <- leftEditor (paraName <<<- ParaName "" $ leftParams) noti2
+    re@(rightFrame,inj3,_ext3) <- rightEditor (paraName <<<- ParaName "" $ rightParams) noti3
     mkEditor
         (\widget v -> do
             core <- readIORef coreRef
             case core of
                 Nothing  -> do
-                    registerEvent noti1 Clicked (onClickedHandler widget coreRef)
+                    _ <- registerEvent noti1 Clicked (onClickedHandler widget coreRef)
                     grid <- gridNew
-                    orientableSetOrientation grid $ getParameter paraOrientation parameters
+                    orientableSetOrientation grid $ getParameter paraOrientation params
                     gridSetColumnSpacing grid 1
                     gridSetRowSpacing grid 1
                     setPrimaryAlign grid boolFrame AlignStart
@@ -533,20 +517,20 @@ eitherOrEditor alphaDefault betaDefault (leftEditor,leftParams) (rightEditor,rig
                           inj2 alphaDefault
                           inj1 False
                     writeIORef coreRef (Just (be,le,re,grid))
-                Just ((_,inj1,_),(leftFrame,inj2,_),(rightFrame,inj3,_),grid) ->
+                Just ((_,inj1',_),(leftFrame',inj2',_),(rightFrame',inj3',_),grid) ->
                     case v of
                             Left vl -> do
-                              containerRemove grid rightFrame
-                              containerAdd grid leftFrame
-                              inj2 vl
-                              inj3 betaDefault
-                              inj1 True
+                              containerRemove grid rightFrame'
+                              containerAdd grid leftFrame'
+                              inj2' vl
+                              inj3' betaDefault
+                              inj1' True
                             Right vr  -> do
-                              containerRemove grid leftFrame
-                              containerAdd grid rightFrame
-                              inj3 vr
-                              inj2 alphaDefault
-                              inj1 False)
+                              containerRemove grid leftFrame'
+                              containerAdd grid rightFrame'
+                              inj3' vr
+                              inj2' alphaDefault
+                              inj1' False)
         (do core <- readIORef coreRef
             case core of
                 Nothing -> return Nothing
@@ -554,24 +538,22 @@ eitherOrEditor alphaDefault betaDefault (leftEditor,leftParams) (rightEditor,rig
                     mbbool <- ext1
                     case mbbool of
                         Nothing -> return Nothing
-                        Just True   ->  do
-                            value <- ext2
-                            case value of
+                        Just True ->
+                            ext2 >>= \case
                                 Nothing -> return Nothing
                                 Just value -> return (Just (Left value))
-                        Just False -> do
-                            value <- ext3
-                            case value of
+                        Just False ->
+                            ext3 >>= \case
                                 Nothing -> return Nothing
                                 Just value -> return (Just (Right value)))
-        (paraName <<<- ParaName "" $ parameters)
+        (paraName <<<- ParaName "" $ params)
         notifier
     where
-    onClickedHandler widget coreRef event =  do
+    onClickedHandler _widget coreRef event =  do
         core <- readIORef coreRef
         case core of
             Nothing  -> error "Impossible"
-            Just (be@(_,_,ext1),(leftFrame,_,_),(rightFrame,_,_),grid) -> do
+            Just ((_,_,ext1),(leftFrame,_,_),(rightFrame,_,_),grid) -> do
                 mbBool <- ext1
                 case mbBool of
                     Just bool ->
@@ -603,7 +585,7 @@ multisetEditor :: (Show alpha, Eq alpha) => alpha
                               --   old entry when adding a new value
     -> Editor [alpha]
 multisetEditor initialValue (ColumnDescr showHeaders columnsDD) (singleEditor, sParams) mbSort mbReplace
-        parameters notifier = do
+        params notifier = do
     coreRef <- newIORef Nothing
     cnoti   <- emptyNotifier
     mkEditor
@@ -611,12 +593,13 @@ multisetEditor initialValue (ColumnDescr showHeaders columnsDD) (singleEditor, s
             core <- readIORef coreRef
             case core of
                 Nothing  -> do
-                    let orientation = getParameter paraOrientation parameters
+                    let orientation = getParameter paraOrientation params
                     grid <- gridNew
                     orientableSetOrientation grid orientation
                     buttonBox <- case orientation of
                         OrientationHorizontal -> buttonBoxNew OrientationVertical
                         OrientationVertical -> buttonBoxNew OrientationHorizontal
+                        _ -> error "Invalid Orientation"
                     (frameS,injS,extS) <- singleEditor sParams cnoti
                     mapM_ (propagateEvent notifier [cnoti]) allGUIEvents
                     addButton    <- buttonNewWithLabel "Add"
@@ -629,7 +612,7 @@ multisetEditor initialValue (ColumnDescr showHeaders columnsDD) (singleEditor, s
                     activateEvent seqStore notifier
                         (Just (\ w h -> afterTreeModelRowDeleted w (\ _ -> void h))) MayHaveChanged
                     treeView    <-  treeViewNewWithModel seqStore
-                    let minSize =   getParameter paraMinSize parameters
+                    let minSize =   getParameter paraMinSize params
                     uncurry (widgetSetSizeRequest treeView) minSize
                     sw          <-  scrolledWindowNew noAdjustment noAdjustment
                     containerAdd sw treeView
@@ -641,13 +624,13 @@ multisetEditor initialValue (ColumnDescr showHeaders columnsDD) (singleEditor, s
                             col <- treeViewColumnNew
                             treeViewColumnSetTitle  col str
                             treeViewColumnSetResizable col True
-                            treeViewAppendColumn treeView col
+                            _ <- treeViewAppendColumn treeView col
                             renderer <- cellRendererTextNew
                             cellLayoutPackStart col renderer True
                             cellLayoutSetDataFunction col renderer seqStore (func renderer)
                         ) columnsDD
                     treeViewSetHeadersVisible treeView showHeaders
-                    onTreeSelectionChanged sel $ selectionHandler sel seqStore injS
+                    _ <- onTreeSelectionChanged sel $ selectionHandler sel seqStore injS
                     setPrimaryExpand grid sw True
                     setSecondaryExpand grid sw True
                     containerAdd grid sw
@@ -664,7 +647,7 @@ multisetEditor initialValue (ColumnDescr showHeaders columnsDD) (singleEditor, s
                         (case mbSort of
                             Nothing -> vs
                             Just sortF -> sortF vs)
-                    onButtonClicked addButton $ do
+                    _ <- onButtonClicked addButton $ do
                         mbv <- extS
                         case mbv of
                             Just v -> do
@@ -676,9 +659,8 @@ multisetEditor initialValue (ColumnDescr showHeaders columnsDD) (singleEditor, s
                                             . filter (\(_,e) -> replaceF v e)
                                                 $ zip [0..] cont
                                 case mbSort of
-                                    Nothing    -> do
-                                        seqStoreAppend seqStore v
-                                        return ()
+                                    Nothing    ->
+                                        void $ seqStoreAppend seqStore v
                                     Just sortF -> do
                                         cont <- seqStoreToList seqStore
                                         seqStoreClear seqStore
@@ -691,7 +673,7 @@ multisetEditor initialValue (ColumnDescr showHeaders columnsDD) (singleEditor, s
                                         treeViewScrollToCell treeView (Just path) noTreeViewColumn False 0.0 0.0
                                     Nothing -> return ()
                             Nothing -> return ()
-                    onButtonClicked removeButton $ do
+                    _ <- onButtonClicked removeButton $ do
                         mbi <- treeSelectionGetSelected sel
                         case mbi of
                             (True, _, iter) -> do
@@ -712,7 +694,7 @@ multisetEditor initialValue (ColumnDescr showHeaders columnsDD) (singleEditor, s
                 Just seqStore -> do
                     v <- seqStoreToList seqStore
                     return (Just v))
-        (paraMinSize <<<- ParaMinSize (-1,-1) $ parameters)
+        (paraMinSize <<<- ParaMinSize (-1,-1) $ params)
         notifier
     where
 --    selectionHandler :: TreeSelection -> SeqStore a -> Injector a -> IO ()
@@ -722,8 +704,7 @@ multisetEditor initialValue (ColumnDescr showHeaders columnsDD) (singleEditor, s
             (True, _, iter) -> do
                 [i] <- treeModelGetPath seqStore iter >>= treePathGetIndices
                 v <- seqStoreGetValue seqStore i
-                inj v
-                return ()
+                void $ inj v
             _ -> return ()
 
 
@@ -761,7 +742,7 @@ dependencyEditor packages para noti = do
         mbp <- ext
         case mbp of
             Nothing -> return Nothing
-            Just ("",v) -> return Nothing
+            Just ("",_v) -> return Nothing
             Just (s,v) -> return (Just $ Dependency (mkPackageName (T.unpack s)) v)
     return (wid,pinj,pext)
 
@@ -820,12 +801,10 @@ versionRangeEditor para noti = do
                     (\v -> (earlierVersion v, Just (Left (EarlierVersionS,v))))
                     (\v -> (unionVersionRanges (thisVersion v) (laterVersion v), Just (Left (ThisOrLaterVersionS,v))))
                     (\v -> (unionVersionRanges (thisVersion v) (earlierVersion v), Just (Left (ThisOrEarlierVersionS,v))))
-                    (\v1 v2 -> (withinVersion v1, Just (Left (WildcardVersionS,v1))))
-#if MIN_VERSION_Cabal(2,0,0)
-                    (\v1 v2 -> (majorBoundVersion v1, Just (Left (MajorBoundVersionS,v1))))
-#endif
-                    (\(vr1, r1) (vr2, r2) -> (unionVersionRanges vr1 vr2, Just (Right (UnionVersionRangesS,vr1,vr2))))
-                    (\(vr1, r1) (vr2, r2) -> (intersectVersionRanges vr1 vr2, Just (Right (IntersectVersionRangesS,vr1,vr2))))
+                    (\v1' _v2 -> (withinVersion v1', Just (Left (WildcardVersionS,v1'))))
+                    (\v1' _v2 -> (majorBoundVersion v1', Just (Left (MajorBoundVersionS,v1'))))
+                    (\(vr1, _r1) (vr2, _r2) -> (unionVersionRanges vr1 vr2, Just (Right (UnionVersionRangesS,vr1,vr2))))
+                    (\(vr1, _r1) (vr2, _r2) -> (intersectVersionRanges vr1 vr2, Just (Right (IntersectVersionRangesS,vr1,vr2))))
                     id
     let vrext = do  mvr <- ext
                     case mvr of
@@ -833,24 +812,20 @@ versionRangeEditor para noti = do
                         Just Nothing -> return (Just anyVersion)
                         Just (Just (Left (ThisVersionS,v)))          -> return (Just (thisVersion v))
                         Just (Just (Left (WildcardVersionS,v)))      -> return (Just (withinVersion v))
-#if MIN_VERSION_Cabal(2,0,0)
                         Just (Just (Left (MajorBoundVersionS,v)))    -> return (Just (majorBoundVersion v))
-#endif
                         Just (Just (Left (LaterVersionS,v)))         -> return (Just (laterVersion v))
                         Just (Just (Left (EarlierVersionS,v)))       -> return (Just (earlierVersion v))
 
                         Just (Just (Left (ThisOrLaterVersionS,v)))   -> return (Just (orLaterVersion v))
                         Just (Just (Left (ThisOrEarlierVersionS,v))) -> return (Just (orEarlierVersion v))
-                        Just (Just (Right (UnionVersionRangesS,v1,v2)))
-                                                        -> return (Just (unionVersionRanges v1 v2))
-                        Just (Just (Right (IntersectVersionRangesS,v1,v2)))
-                                                        -> return (Just (intersectVersionRanges v1 v2))
+                        Just (Just (Right (UnionVersionRangesS,v1',v2')))
+                                                        -> return (Just (unionVersionRanges v1' v2'))
+                        Just (Just (Right (IntersectVersionRangesS,v1',v2')))
+                                                        -> return (Just (intersectVersionRanges v1' v2'))
     return (wid,vrinj,vrext)
         where
             v1 = [ThisVersionS,WildcardVersionS
-#if MIN_VERSION_Cabal(2,0,0)
                  ,MajorBoundVersionS
-#endif
                  ,LaterVersionS,ThisOrLaterVersionS,EarlierVersionS,ThisOrEarlierVersionS]
             v2 = [UnionVersionRangesS,IntersectVersionRangesS]
 
@@ -875,11 +850,10 @@ versionEditor :: Editor Version
 versionEditor para noti = do
     (wid,inj,ext) <- stringEditor (not . null) True para noti
     let pinj v = inj (display v)
-    let pext = do
-        s <- ext
-        case s of
-            Nothing -> return Nothing
-            Just s -> return (simpleParse s)
+    let pext =
+          ext >>= \case
+              Nothing -> return Nothing
+              Just s -> return (simpleParse s)
     return (wid, pinj, pext)
 
 instance Default Version1
