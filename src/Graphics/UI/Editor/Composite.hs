@@ -677,7 +677,7 @@ multisetEditor initialValue (ColumnDescr showHeaders columnsDD) (singleEditor, s
                         mbi <- treeSelectionGetSelected sel
                         case mbi of
                             (True, _, iter) -> do
-                                [i] <- treeModelGetPath seqStore iter >>= treePathGetIndices
+                                Just [i] <- treeModelGetPath seqStore iter >>= treePathGetIndices
                                 seqStoreRemove seqStore i
                             _ -> return ()
                     writeIORef coreRef (Just seqStore)
@@ -702,7 +702,7 @@ multisetEditor initialValue (ColumnDescr showHeaders columnsDD) (singleEditor, s
         ts <- treeSelectionGetSelected sel
         case ts of
             (True, _, iter) -> do
-                [i] <- treeModelGetPath seqStore iter >>= treePathGetIndices
+                Just [i] <- treeModelGetPath seqStore iter >>= treePathGetIndices
                 v <- seqStoreGetValue seqStore i
                 void $ inj v
             _ -> return ()
