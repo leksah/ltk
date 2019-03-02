@@ -48,6 +48,7 @@ import Control.Monad.IO.Class (MonadIO(..), MonadIO)
 import Data.Text (Text)
 import Data.Aeson (ToJSON, FromJSON)
 import GHC.Generics (Generic)
+import GHC.Stack (HasCallStack)
 import qualified Data.Text as T (pack)
 import Data.GI.Base.ManagedPtr (unsafeCastTo)
 import GI.Gtk.Objects.Widget (Widget(..))
@@ -108,54 +109,54 @@ instance FromJSON PaneLayout
 
 class (Typeable alpha, PaneMonad delta) =>  Pane alpha delta | alpha -> delta  where
 
-    getTopWidget    ::   alpha -> delta Widget
+    getTopWidget    ::   HasCallStack => alpha -> delta Widget
     -- ^ gets the top Widget of this pane
-    paneId          ::   alpha -> Text
-    primPaneName    ::   alpha -> Text
+    paneId          ::   HasCallStack => alpha -> Text
+    primPaneName    ::   HasCallStack => alpha -> Text
 
-    paneName        ::   alpha -> PaneName
+    paneName        ::   HasCallStack => alpha -> PaneName
     paneName b      =   if getAddedIndex b == 0
                             then primPaneName b
                             else primPaneName b <> " (" <> T.pack (show $ getAddedIndex b) <> ")"
 
-    paneTooltipText :: alpha -> Maybe Text
+    paneTooltipText :: HasCallStack => alpha -> Maybe Text
     paneTooltipText _p = Nothing
 
-    getAddedIndex   ::   alpha -> Int
+    getAddedIndex   ::   HasCallStack => alpha -> Int
     getAddedIndex _ =   0
 
 
 class (Pane alpha delta, Typeable beta, Show beta, Read beta) => RecoverablePane alpha beta delta | beta  -> alpha, alpha -> beta  where
 
-    saveState       ::   alpha -> delta (Maybe beta)
-    recoverState    ::   PanePath -> beta -> delta (Maybe alpha)
+    saveState       ::   HasCallStack => alpha -> delta (Maybe beta)
+    recoverState    ::   HasCallStack => PanePath -> beta -> delta (Maybe alpha)
 
-    builder         ::   PanePath -> Notebook -> Window -> delta (Maybe alpha,Connections)
+    builder         ::   HasCallStack => PanePath -> Notebook -> Window -> delta (Maybe alpha,Connections)
 
     -- getEditor    ::   Editor alpha
 
-    makeActive      ::   alpha -> delta ()
+    makeActive      ::   HasCallStack => alpha -> delta ()
     makeActive pane =   activateThisPane pane []
 
-    closePane       ::   alpha -> delta Bool
+    closePane       ::   HasCallStack => alpha -> delta Bool
     closePane       =   closeThisPane
 
-    getPane         ::  delta (Maybe alpha)
+    getPane         ::  HasCallStack => delta (Maybe alpha)
     getPane         =   getThisPane
 
-    forceGetPane    ::  Either PanePath Text  -> delta alpha
+    forceGetPane    ::  HasCallStack => Either PanePath Text  -> delta alpha
     forceGetPane pp =   do  mbPane <- getOrBuildPane pp
                             case mbPane of
                                 Nothing -> error "Can't get pane "
                                 Just p -> return p
 
-    getOrBuildPane  ::  Either PanePath Text -> delta (Maybe alpha)
+    getOrBuildPane  ::  HasCallStack => Either PanePath Text -> delta (Maybe alpha)
     getOrBuildPane  =   getOrBuildThisPane
 
-    displayPane     ::  alpha -> Bool -> delta ()
+    displayPane     ::  HasCallStack => alpha -> Bool -> delta ()
     displayPane     =   displayThisPane
 
-    getAndDisplayPane :: Either PanePath Text -> Bool  -> delta (Maybe alpha)
+    getAndDisplayPane :: HasCallStack => Either PanePath Text -> Bool  -> delta (Maybe alpha)
     getAndDisplayPane pps b = do
         mbP <- getOrBuildThisPane pps
         case mbP of
@@ -164,7 +165,8 @@ class (Pane alpha delta, Typeable beta, Show beta, Read beta) => RecoverablePane
                 displayPane p b
                 return (Just p)
 
-    buildPane       ::  PanePath ->
+    buildPane       ::  HasCallStack =>
+                        PanePath ->
                         Notebook ->
                         (PanePath -> Notebook -> Window -> delta (Maybe alpha,Connections)) ->
                         delta (Maybe alpha)
@@ -173,22 +175,22 @@ class (Pane alpha delta, Typeable beta, Show beta, Read beta) => RecoverablePane
 
 
 class (Applicative delta, MonadIO delta) =>  PaneMonad delta where
-    setFrameState   ::  FrameState delta -> delta ()
-    getFrameState   ::  delta (FrameState delta)
-    runInIO         ::  forall alpha beta. (beta -> delta alpha) -> delta (beta -> IO alpha)
-    panePathForGroup::  Text -> delta PanePath
+    setFrameState   ::  HasCallStack => FrameState delta -> delta ()
+    getFrameState   ::  HasCallStack => delta (FrameState delta)
+    runInIO         ::  forall alpha beta. HasCallStack => (beta -> delta alpha) -> delta (beta -> IO alpha)
+    panePathForGroup::  HasCallStack => Text -> delta PanePath
 
-    getThisPane     ::  forall alpha beta . RecoverablePane alpha beta delta => delta (Maybe alpha)
-    displayThisPane ::  forall alpha beta . RecoverablePane alpha beta delta => alpha -> Bool -> delta ()
+    getThisPane     ::  forall alpha beta . (HasCallStack, RecoverablePane alpha beta delta) => delta (Maybe alpha)
+    displayThisPane ::  forall alpha beta . (HasCallStack, RecoverablePane alpha beta delta) => alpha -> Bool -> delta ()
     getOrBuildThisPane
-                    ::  forall alpha beta . RecoverablePane alpha beta delta => Either PanePath Text -> delta (Maybe alpha)
-    buildThisPane   ::  forall alpha beta . RecoverablePane alpha beta delta =>
+                    ::  forall alpha beta . (HasCallStack, RecoverablePane alpha beta delta) => Either PanePath Text -> delta (Maybe alpha)
+    buildThisPane   ::  forall alpha beta . (HasCallStack, RecoverablePane alpha beta delta) =>
                         PanePath ->
                         Notebook ->
                         (PanePath -> Notebook -> Window -> delta (Maybe alpha,Connections)) ->
                         delta (Maybe alpha)
-    activateThisPane :: forall alpha beta . RecoverablePane alpha beta delta =>  alpha -> Connections -> delta ()
-    closeThisPane   ::  forall alpha beta . RecoverablePane alpha beta delta =>  alpha -> delta Bool
+    activateThisPane :: forall alpha beta . (HasCallStack, RecoverablePane alpha beta delta) =>  alpha -> Connections -> delta ()
+    closeThisPane   ::  forall alpha beta . (HasCallStack, RecoverablePane alpha beta delta) =>  alpha -> delta Bool
 
 type PaneName = Text
 

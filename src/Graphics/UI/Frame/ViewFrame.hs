@@ -222,13 +222,13 @@ addPaneAdmin pane conn pp = do
                   T.unpack (paneName pane))
                $ return False
 
-getPanePrim ::  RecoverablePane alpha beta delta => delta (Maybe alpha)
+getPanePrim :: (HasCallStack, RecoverablePane alpha beta delta) => delta (Maybe alpha)
 getPanePrim =
     getPanes >>= \case
         [p] -> return $ Just p
         _ -> return Nothing
 
-getPanes ::  RecoverablePane alpha beta delta => delta [alpha]
+getPanes :: (HasCallStack, RecoverablePane alpha beta delta) => delta [alpha]
 getPanes = mapMaybe (\ (PaneC p) -> cast p) . Map.elems <$> getPanesSt
 
 notebookInsertOrdered :: PaneMonad alpha => (IsNotebook self, IsWidget child)
@@ -1370,13 +1370,13 @@ adjustLayout pp layout' replace    = adjust' pp layout'
 --
 -- | Get the widget from a list of strings
 --
-widgetFromPath :: MonadIO m => Widget -> [Text] -> m Widget
+widgetFromPath :: (HasCallStack, MonadIO m) => Widget -> [Text] -> m Widget
 widgetFromPath w [] = return w
 widgetFromPath w path = do
     children    <- liftIO (unsafeCastTo Container w) >>= containerGetChildren
     chooseWidgetFromPath children path
 
-chooseWidgetFromPath :: MonadIO m => [Widget] -> [Text] -> m Widget
+chooseWidgetFromPath :: (HasCallStack, MonadIO m) => [Widget] -> [Text] -> m Widget
 chooseWidgetFromPath _ [] = error "Cant't find widget (empty path)"
 chooseWidgetFromPath widgets (h:t) = do
     names       <- mapM widgetGetName widgets
@@ -1385,14 +1385,14 @@ chooseWidgetFromPath widgets (h:t) = do
         Nothing     -> error $"Cant't find widget path " ++ show (h:t) ++ " found only " ++ show names
         Just ind    -> widgetFromPath (widgets !! ind) t
 
-widgetGet :: PaneMonad alpha => [Text] -> (Widget -> IO b) -> alpha  b
+widgetGet :: (HasCallStack, PaneMonad alpha) => [Text] -> (Widget -> IO b) -> alpha  b
 widgetGet strL cf = do
     windows' <- getWindowsSt
     widgets <- liftIO $ mapM toWidget windows'
     r <- liftIO $ chooseWidgetFromPath widgets strL
     liftIO (cf r)
 
-getUIAction :: PaneMonad alpha => Text -> (Action -> IO a) -> alpha a
+getUIAction :: (HasCallStack, PaneMonad alpha) => Text -> (Action -> IO a) -> alpha a
 getUIAction str f = do
     uiManager' <- getUiManagerSt
     findAction <- uIManagerGetAction uiManager' str
@@ -1400,53 +1400,53 @@ getUIAction str f = do
         Just act -> liftIO $ f act
         Nothing  -> error $"getUIAction can't find action " ++ T.unpack str
 
-getThis :: PaneMonad delta =>  (FrameState delta -> alpha) -> delta alpha
+getThis :: (HasCallStack, PaneMonad delta) =>  (FrameState delta -> alpha) -> delta alpha
 getThis sel = sel <$> getFrameState
-setThis :: PaneMonad delta =>  (FrameState delta -> alpha -> FrameState delta) -> alpha -> delta ()
+setThis :: (HasCallStack, PaneMonad delta) =>  (FrameState delta -> alpha -> FrameState delta) -> alpha -> delta ()
 setThis sel value = do
     st <- getFrameState
     trace ("!!! setFrameState " <> show (sel st value)) $ setFrameState (sel st value)
 
-getWindowsSt :: PaneMonad alpha => alpha [Window]
+getWindowsSt :: (HasCallStack, PaneMonad alpha) => alpha [Window]
 getWindowsSt    = getThis windows
-setWindowsSt :: PaneMonad alpha => [Window] -> alpha ()
+setWindowsSt :: (HasCallStack, PaneMonad alpha) => [Window] -> alpha ()
 setWindowsSt    = setThis (\st value -> st{windows = value})
-getUiManagerSt :: PaneMonad alpha => alpha UIManager
+getUiManagerSt :: (HasCallStack, PaneMonad alpha) => alpha UIManager
 getUiManagerSt  = getThis uiManager
-getPanesSt :: PaneMonad alpha => alpha (Map PaneName (IDEPane alpha))
+getPanesSt :: (HasCallStack, PaneMonad alpha) => alpha (Map PaneName (IDEPane alpha))
 getPanesSt      = getThis panes
-setPanesSt :: PaneMonad alpha => Map PaneName (IDEPane alpha) -> alpha ()
+setPanesSt :: (HasCallStack, PaneMonad alpha) => Map PaneName (IDEPane alpha) -> alpha ()
 setPanesSt      = setThis (\st value -> st{panes = value})
-getPaneMapSt :: PaneMonad alpha => alpha (Map PaneName (PanePath, [Connection]))
+getPaneMapSt :: (HasCallStack, PaneMonad alpha) => alpha (Map PaneName (PanePath, [Connection]))
 getPaneMapSt    = getThis paneMap
-setPaneMapSt :: PaneMonad alpha => Map PaneName (PanePath, [Connection]) -> alpha ()
+setPaneMapSt :: (HasCallStack, PaneMonad alpha) => Map PaneName (PanePath, [Connection]) -> alpha ()
 setPaneMapSt    = setThis (\st value -> st{paneMap = value})
-getActivePaneSt :: PaneMonad alpha => alpha (Maybe (PaneName, [Connection]), [PaneName])
+getActivePaneSt :: (HasCallStack, PaneMonad alpha) => alpha (Maybe (PaneName, [Connection]), [PaneName])
 getActivePaneSt = getThis activePane
-setActivePaneSt :: PaneMonad alpha => (Maybe (PaneName, [Connection]), [PaneName]) -> alpha ()
+setActivePaneSt :: (HasCallStack, PaneMonad alpha) => (Maybe (PaneName, [Connection]), [PaneName]) -> alpha ()
 setActivePaneSt = setThis (\st value -> st{activePane = value})
-getLayoutSt :: PaneMonad alpha => alpha PaneLayout
+getLayoutSt :: (HasCallStack, PaneMonad alpha) => alpha PaneLayout
 getLayoutSt     = getThis layout
-setLayoutSt :: PaneMonad alpha => PaneLayout -> alpha ()
+setLayoutSt :: (HasCallStack, PaneMonad alpha) => PaneLayout -> alpha ()
 setLayoutSt     = setThis (\st value -> st{layout = value})
-getPanePathFromNB :: PaneMonad alpha => alpha (Map (Ptr Notebook) PanePath)
+getPanePathFromNB :: (HasCallStack, PaneMonad alpha) => alpha (Map (Ptr Notebook) PanePath)
 getPanePathFromNB  = getThis panePathFromNB
-setPanePathFromNB :: PaneMonad alpha => Map (Ptr Notebook) PanePath -> alpha ()
+setPanePathFromNB :: (HasCallStack, PaneMonad alpha) => Map (Ptr Notebook) PanePath -> alpha ()
 setPanePathFromNB  = setThis (\st value -> st{panePathFromNB = value})
 
-getActivePane :: PaneMonad alpha => alpha (Maybe (PaneName, [Connection]), [PaneName])
+getActivePane :: (HasCallStack, PaneMonad alpha) => alpha (Maybe (PaneName, [Connection]), [PaneName])
 getActivePane   = getActivePaneSt
-setActivePane :: PaneMonad alpha => (Maybe (PaneName, [Connection]), [PaneName]) -> alpha ()
+setActivePane :: (HasCallStack, PaneMonad alpha) => (Maybe (PaneName, [Connection]), [PaneName]) -> alpha ()
 setActivePane   = setActivePaneSt
-getUiManager :: PaneMonad alpha => alpha UIManager
+getUiManager :: (HasCallStack, PaneMonad alpha) => alpha UIManager
 getUiManager    = getUiManagerSt
-getWindows :: PaneMonad alpha => alpha [Window]
+getWindows :: (HasCallStack, PaneMonad alpha) => alpha [Window]
 getWindows      = getWindowsSt
-getMainWindow :: PaneMonad alpha => alpha Window
+getMainWindow :: (HasCallStack, PaneMonad alpha) => alpha Window
 getMainWindow   = head <$> getWindows
-getLayout :: PaneMonad alpha => alpha PaneLayout
+getLayout :: (HasCallStack, PaneMonad alpha) => alpha PaneLayout
 getLayout       = getLayoutSt
-getMRUPanes :: PaneMonad alpha => alpha [PaneName]
+getMRUPanes :: (HasCallStack, PaneMonad alpha) => alpha [PaneName]
 getMRUPanes     =
     getActivePane >>= \case
         (Nothing, mru) -> return mru
