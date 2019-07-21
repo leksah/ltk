@@ -69,7 +69,8 @@ import Control.Exception as E (catch, IOException)
 import Control.Monad.IO.Class (MonadIO(..))
 import qualified Data.Text as T (strip, unpack, pack, empty)
 import Data.Text (Text)
-import Data.GI.Base (new', unsafeCastTo)
+import Data.GI.Base (unsafeCastTo)
+import Data.GI.Base.GObject (new')
 import GI.Gtk
        (orientableSetOrientation, colorChooserGetRgba,
         colorChooserSetRgba, widgetSetHalign, imageSetFromIconName,

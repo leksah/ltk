@@ -156,7 +156,7 @@ import GI.Gtk
         EventBox, notebookSetCurrentPage, widgetShowAll,
         notebookInsertPageMenu, widgetGetName, notebookGetNthPage,
         notebookGetNPages, labelNew, Label, IsWidget, IsNotebook,
-        widgetSetName)
+        widgetSetName, CssProvider(..))
 #ifdef MIN_VERSION_GTK_3_20
 import GI.Gtk.Objects.Widget (widgetSetFocusOnClick)
 #else
@@ -172,7 +172,8 @@ import GI.Gdk
        (DragContext, Screen, getEventButtonState)
 import Graphics.UI.Frame.Rectangle (getRectangleWidth, getRectangleHeight)
 import Data.GI.Base
-       (unsafeManagedPtrCastPtr, castTo, unsafeCastTo, new')
+       (unsafeManagedPtrCastPtr, castTo, unsafeCastTo)
+import Data.GI.Base.GObject (new')
 import Data.Int (Int32)
 import Data.Word (Word32)
 import Data.GI.Gtk.ModelView.Types (equalManagedPtr)
