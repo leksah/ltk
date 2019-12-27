@@ -1,6 +1,8 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE ViewPatterns #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 -----------------------------------------------------------------------------
 --
@@ -40,6 +42,7 @@ import Prelude.Compat
 import Control.Monad
 import Data.IORef
 import Data.Maybe
+import Data.Set as S (singleton)
 import Data.Text (Text)
 import qualified Data.Text as T (pack, unpack)
 
@@ -51,6 +54,11 @@ import Graphics.UI.Editor.Basics
 import Graphics.UI.Editor.MakeEditor
 import Graphics.UI.Editor.Simple
 import Data.List (sortBy, nub, sort, elemIndex)
+#if MIN_VERSION_Cabal (3,0,0)
+import Distribution.Types.LibraryName (LibraryName(..))
+#else
+import Distribution.Types.UnqualComponentName (UnqualComponentName)
+#endif
 import Distribution.Simple
     (orEarlierVersion,
      orLaterVersion,
@@ -93,7 +101,16 @@ import Distribution.Version
        (Version, majorBoundVersion,
         withinVersion, intersectVersionRanges, unionVersionRanges,
         earlierVersion, laterVersion, thisVersion, anyVersion,
-        foldVersionRange')
+        cataVersionRange, normaliseVersionRange, VersionRangeF(..))
+
+#if MIN_VERSION_Cabal (3,0,0)
+viewDependency (Dependency a b c) = (a, b, c)
+mkDependency a b c = Dependency a b c
+#else
+data LibraryName = LMainLibName | LSubLibName UnqualComponentName
+viewDependency (Dependency a b) = (a, b, S.singleton LMainLibName)
+mkDependency a b _ = Dependency a b
+#endif
 
 --
 -- | An editor which composes two subeditors
@@ -737,27 +754,27 @@ dependencyEditor packages para noti = do
         (versionRangeEditor,paraName <<<- ParaName "Version" $ emptyParams)
         (paraOrientation <<<- ParaOrientation OrientationVertical $ para)
         noti
-    let pinj (Dependency pn v) = inj (T.pack (unPackageName pn),v)
+    let pinj (viewDependency -> (pn, v, _)) = inj (T.pack (unPackageName pn),v)
     let pext = do
         mbp <- ext
         case mbp of
             Nothing -> return Nothing
             Just ("",_v) -> return Nothing
-            Just (s,v) -> return (Just $ Dependency (mkPackageName (T.unpack s)) v)
+            Just (s,v) -> return (Just $ mkDependency (mkPackageName (T.unpack s)) v (S.singleton LMainLibName))
     return (wid,pinj,pext)
 
 dependenciesEditor :: [PackageIdentifier] -> Editor [Dependency]
 dependenciesEditor packages p =
     multisetEditor
         def
-        (ColumnDescr True [("Package",\cell (Dependency pn _) -> setCellRendererTextText cell $ T.pack (unPackageName pn))
-                           ,("Version",\cell (Dependency _ vers) -> setCellRendererTextText cell $ T.pack $ display vers)])
+        (ColumnDescr True [("Package",\cell (viewDependency -> (pn, _, _)) -> setCellRendererTextText cell $ T.pack (unPackageName pn))
+                           ,("Version",\cell (viewDependency -> (_, vers, _)) -> setCellRendererTextText cell $ T.pack $ display vers)])
         (dependencyEditor packages,
             paraHAlign <<<- ParaHAlign AlignFill
                 $ paraVAlign <<<- ParaVAlign AlignCenter
                    $ emptyParams)
-        (Just (sortBy (\ (Dependency p1 _) (Dependency p2 _) -> compare p1 p2)))
-        (Just (\ (Dependency p1 _) (Dependency p2 _) -> p1 == p2))
+        (Just (sortBy (\ (viewDependency -> (p1, _, _)) (viewDependency -> (p2, _, _)) -> compare p1 p2)))
+        (Just (\ (viewDependency -> (p1, _, _)) (viewDependency -> (p2, _, _)) -> p1 == p2))
         (paraShadow <<<- ParaShadow ShadowTypeIn
             $ paraHAlign <<<- ParaHAlign AlignFill
                 $ paraVAlign <<<- ParaVAlign AlignCenter
@@ -794,18 +811,20 @@ versionRangeEditor para noti = do
             False "Any Version"
             (paraOrientation <<<- ParaOrientation OrientationVertical $ para)
             noti
-    let vrinj = inj . snd . foldVersionRange'
-                    (anyVersion, Nothing)
-                    (\v -> (thisVersion v, Just (Left (ThisVersionS,v))))
-                    (\v -> (laterVersion v, Just (Left (LaterVersionS,v))))
-                    (\v -> (earlierVersion v, Just (Left (EarlierVersionS,v))))
-                    (\v -> (unionVersionRanges (thisVersion v) (laterVersion v), Just (Left (ThisOrLaterVersionS,v))))
-                    (\v -> (unionVersionRanges (thisVersion v) (earlierVersion v), Just (Left (ThisOrEarlierVersionS,v))))
-                    (\v1' _v2 -> (withinVersion v1', Just (Left (WildcardVersionS,v1'))))
-                    (\v1' _v2 -> (majorBoundVersion v1', Just (Left (MajorBoundVersionS,v1'))))
-                    (\(vr1, _r1) (vr2, _r2) -> (unionVersionRanges vr1 vr2, Just (Right (UnionVersionRangesS,vr1,vr2))))
-                    (\(vr1, _r1) (vr2, _r2) -> (intersectVersionRanges vr1 vr2, Just (Right (IntersectVersionRangesS,vr1,vr2))))
-                    id
+    let vrinj = inj . snd . cataVersionRange (\case
+                  AnyVersionF              -> (anyVersion, Nothing)
+                  (ThisVersionF v)         -> (thisVersion v, Just (Left (ThisVersionS,v)))
+                  (LaterVersionF v)        -> (laterVersion v, Just (Left (LaterVersionS,v)))
+                  (EarlierVersionF v)      -> (earlierVersion v, Just (Left (EarlierVersionS,v)))
+                  (OrLaterVersionF v)      -> (unionVersionRanges (thisVersion v) (laterVersion v), Just (Left (ThisOrLaterVersionS,v)))
+                  (OrEarlierVersionF v)    -> (unionVersionRanges (thisVersion v) (earlierVersion v), Just (Left (ThisOrEarlierVersionS,v)))
+                  (WildcardVersionF v1')   -> (withinVersion v1', Just (Left (WildcardVersionS,v1')))
+                  (MajorBoundVersionF v1') -> (majorBoundVersion v1', Just (Left (MajorBoundVersionS,v1')))
+                  (UnionVersionRangesF (vr1, _r1) (vr2, _r2))
+                                           -> (unionVersionRanges vr1 vr2, Just (Right (UnionVersionRangesS,vr1,vr2)))
+                  (IntersectVersionRangesF (vr1, _r1) (vr2, _r2))
+                                           -> (intersectVersionRanges vr1 vr2, Just (Right (IntersectVersionRangesS,vr1,vr2)))
+          ) . normaliseVersionRange
     let vrext = do  mvr <- ext
                     case mvr of
                         Nothing -> return (Just anyVersion)
@@ -870,6 +889,9 @@ instance Default VersionRange
 
 instance Default Dependency
     where def = Dependency def def
+#if MIN_VERSION_Cabal (3,0,0)
+                    (S.singleton LMainLibName)
+#endif
 
 instance Default PackageName
     where def = mkPackageName def
