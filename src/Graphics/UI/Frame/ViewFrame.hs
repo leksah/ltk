@@ -180,7 +180,7 @@ import Data.GI.Gtk.ModelView.Types (equalManagedPtr)
 import GI.Gtk.Objects.Dialog (Dialog(..))
 import GI.Gtk.Objects.MessageDialog
        (constructMessageDialogButtons, setMessageDialogMessageType)
-import GI.Gtk.Objects.Label (noLabel)
+import GI.Gtk.Objects.Label (Label)
 import GI.Gtk.Objects.Widget (widgetSetTooltipText)
 import GHC.Stack (HasCallStack)
 import Foreign (Ptr)
@@ -713,7 +713,7 @@ viewNest' panePath group = do
         TerminalP {} -> do
             nb <- newNotebook (panePath ++ [GroupP group])
             widgetSetName nb (groupPrefix <> group)
-            notebookInsertOrdered activeNotebook nb group noLabel Nothing True
+            notebookInsertOrdered activeNotebook nb group (Nothing :: Maybe Label) Nothing True
             widgetShowAll nb
                 --widgetGrabFocus activeNotebook
             handleFunc <-  runInIO (handleNotebookSwitch nb)
@@ -927,7 +927,7 @@ move' (paneName', toNB) = do
                                     else do
                                         notebookRemovePage fromNB num
                                         label <- groupLabel group
-                                        notebookInsertOrdered toNB groupNBOrPaned group noLabel Nothing True
+                                        notebookInsertOrdered toNB groupNBOrPaned group (Nothing :: Maybe Label) Nothing True
                                         notebookSetTabLabel toNB groupNBOrPaned (Just label)
                                         adjustPanes fromPath (toPath ++ [GroupP group])
                                         adjustLayoutForGroupMove fromPath toPath group
@@ -955,7 +955,7 @@ move' (paneName', toNB) = do
                                             then trace "ViewFrame>>move': widget not found" return ()
                                             else do
                                                 notebookRemovePage fromNB num
-                                                notebookInsertOrdered toNB child paneName' noLabel (paneTooltipText pane) False
+                                                notebookInsertOrdered toNB child paneName' (Nothing :: Maybe Label) (paneTooltipText pane) False
                                                 let paneMap1    =   Map.delete paneName' paneMap'
                                                 setPaneMapSt    $   Map.insert paneName' (toPath,cid) paneMap1
 

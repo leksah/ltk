@@ -74,7 +74,7 @@ import Data.GI.Base.GObject (new')
 import GI.Gtk
        (orientableSetOrientation, colorChooserGetRgba,
         colorChooserSetRgba, widgetSetHalign, imageSetFromIconName,
-        imageNewFromIconName, gridNew, noAdjustment,
+        imageNewFromIconName, gridNew, Adjustment,
         setCellRendererToggleActive, RadioButton, onColorButtonColorSet,
         colorButtonNew, fontButtonGetFontName, fontButtonSetFontName,
         onFontButtonFontSet, fontButtonNew, widgetDestroy,
@@ -356,7 +356,7 @@ multilineStringEditor params notifier = do
                 Nothing  -> do
                     aTextView       <-  textViewNew
                     widgetSetName aTextView (getParameter paraName params)
-                    aScrolledWindow <-  scrolledWindowNew noAdjustment noAdjustment
+                    aScrolledWindow <-  scrolledWindowNew (Nothing :: Maybe Adjustment) (Nothing :: Maybe Adjustment)
                     scrolledWindowSetPolicy aScrolledWindow PolicyTypeAutomatic PolicyTypeAutomatic
                     containerAdd aScrolledWindow aTextView
                     containerAdd widget aScrolledWindow
@@ -616,7 +616,7 @@ staticListMultiEditor list showF params notifier = do
                     mapM_ (seqStoreAppend seqStore . (\ e -> (e `elem` objs, e))) list
                     let minSize =   getParameter paraMinSize params
                     uncurry (widgetSetSizeRequest listView) minSize
-                    sw <- scrolledWindowNew noAdjustment noAdjustment
+                    sw <- scrolledWindowNew (Nothing :: Maybe Adjustment) (Nothing :: Maybe Adjustment)
                     containerAdd sw listView
                     scrolledWindowSetPolicy sw PolicyTypeAutomatic PolicyTypeAutomatic
                     containerAdd widget sw
@@ -684,7 +684,7 @@ staticListEditor list showF params notifier = do
                     mapM_ (seqStoreAppend seqStore) list
                     let minSize =   getParameter paraMinSize params
                     uncurry (widgetSetSizeRequest listView) minSize
-                    sw <- scrolledWindowNew noAdjustment noAdjustment
+                    sw <- scrolledWindowNew (Nothing :: Maybe Adjustment) (Nothing :: Maybe Adjustment)
                     containerAdd sw listView
                     scrolledWindowSetPolicy sw PolicyTypeAutomatic PolicyTypeAutomatic
                     containerAdd widget sw

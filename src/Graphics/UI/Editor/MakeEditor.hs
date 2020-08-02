@@ -73,7 +73,7 @@ import GI.Gtk.Enums
         PositionType(..))
 import Data.GI.Base.ManagedPtr (castTo)
 import Data.GI.Gtk.ModelView.CustomStore (customStoreGetRow)
-import GI.Gtk.Objects.Adjustment (noAdjustment)
+import GI.Gtk.Objects.Adjustment (Adjustment)
 import Data.GI.Gtk.ModelView.SeqStore (seqStoreNew)
 import GI.Gtk.Objects.Label (labelNew)
 import Control.Exception (catch)
@@ -137,7 +137,7 @@ buildEditor (NFD pairList)      v = do
     let (widgets, setInjs, getExts, notifiers) = unzip4 resList
     notifier <- emptyNotifier
     mapM_ (\ (labelString, widget) -> do
-        sw <- scrolledWindowNew noAdjustment noAdjustment
+        sw <- scrolledWindowNew (Nothing :: Maybe Adjustment) (Nothing :: Maybe Adjustment)
         containerAdd sw widget
         scrolledWindowSetPolicy sw PolicyTypeAutomatic PolicyTypeAutomatic
         notebookAppendPage nb sw . Just =<< labelNew (Just labelString))
@@ -164,7 +164,7 @@ buildEditor (NFD pairList)      v = do
             _ -> return ()
 
     grid        <- gridNew
-    sw          <- scrolledWindowNew noAdjustment noAdjustment
+    sw          <- scrolledWindowNew (Nothing :: Maybe Adjustment) (Nothing :: Maybe Adjustment)
     containerAdd sw listView
     scrolledWindowSetPolicy sw PolicyTypeNever PolicyTypeAutomatic
     widgetSetHalign sw AlignStart

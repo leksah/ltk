@@ -73,7 +73,7 @@ import Distribution.Package (pkgName)
 import GI.Gtk
        (gridSetRowSpacing, gridSetColumnSpacing, orientableSetOrientation,
         buttonBoxNew, panedNew, gridNew, setCellRendererTextText,
-        noTreeViewColumn, noAdjustment, FileChooserAction,
+        TreeViewColumn, Adjustment, FileChooserAction,
         treeModelGetPath, treeSelectionGetSelected, treeViewScrollToCell,
         treeSelectionSelectPath, onButtonClicked, onTreeSelectionChanged,
         treeViewSetHeadersVisible, cellLayoutPackStart,
@@ -631,7 +631,7 @@ multisetEditor initialValue (ColumnDescr showHeaders columnsDD) (singleEditor, s
                     treeView    <-  treeViewNewWithModel seqStore
                     let minSize =   getParameter paraMinSize params
                     uncurry (widgetSetSizeRequest treeView) minSize
-                    sw          <-  scrolledWindowNew noAdjustment noAdjustment
+                    sw          <-  scrolledWindowNew (Nothing :: Maybe Adjustment) (Nothing :: Maybe Adjustment)
                     containerAdd sw treeView
                     scrolledWindowSetPolicy sw PolicyTypeAutomatic PolicyTypeAutomatic
                     scrolledWindowSetMinContentHeight sw (snd minSize)
@@ -687,7 +687,7 @@ multisetEditor initialValue (ColumnDescr showHeaders columnsDD) (singleEditor, s
                                     Just idx -> do
                                         path <- treePathNewFromIndices' [fromIntegral idx]
                                         treeSelectionSelectPath sel path
-                                        treeViewScrollToCell treeView (Just path) noTreeViewColumn False 0.0 0.0
+                                        treeViewScrollToCell treeView (Just path) (Nothing :: Maybe TreeViewColumn) False 0.0 0.0
                                     Nothing -> return ()
                             Nothing -> return ()
                     _ <- onButtonClicked removeButton $ do
