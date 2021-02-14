@@ -20,32 +20,12 @@ source-repository head
     type: git
     location: https://github.com/leksah/ltk
 
-flag gtk-320
-    description:
-        GTK+ is 3.20 or later
-
-flag check-gtk-version
-    description:
-        This flag can be used to disable the pkgconfig-depends
-        as they can cause problems on macOS when using nix.
-    manual: True
-    default: True
-
 library
 
     if !impl(ghcjs -any)
         build-depends:
             ghc -any
 
-    if flag(check-gtk-version)
-
-        if flag(gtk-320)
-            cpp-options: -DMIN_VERSION_GTK_3_20
-            pkgconfig-depends: gtk+-3.0 >=3.20
-        else
-            pkgconfig-depends: gdk-3.0 <3.20
-    else
-        cpp-options: -DMIN_VERSION_GTK_3_20
     exposed-modules:
         Control.Event
         Graphics.UI.Editor.Basics

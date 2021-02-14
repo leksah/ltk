@@ -157,11 +157,7 @@ import GI.Gtk
         notebookInsertPageMenu, widgetGetName, notebookGetNthPage,
         notebookGetNPages, labelNew, Label, IsWidget, IsNotebook,
         widgetSetName, CssProvider(..))
-#ifdef MIN_VERSION_GTK_3_20
 import GI.Gtk.Objects.Widget (widgetSetFocusOnClick)
-#else
-import GI.Gtk.Objects.Button (buttonSetFocusOnClick)
-#endif
 import GI.Gtk.Enums
        (Orientation(..), WindowType(..), ResponseType(..),
         ButtonsType(..), MessageType(..), Align(..),
@@ -271,11 +267,7 @@ mkLabelBox lbl paneName' = do
 
     tabButton <- buttonNew
     widgetSetName tabButton "leksah-close-button"
-#ifdef MIN_VERSION_GTK_3_20
     widgetSetFocusOnClick tabButton False
-#else
-    buttonSetFocusOnClick tabButton False
-#endif
     buttonSetRelief tabButton ReliefStyleNone
     widgetSetHalign tabButton AlignEnd
     widgetSetValign tabButton AlignCenter
