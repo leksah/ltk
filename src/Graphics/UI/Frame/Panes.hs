@@ -39,7 +39,6 @@ module Graphics.UI.Frame.Panes (
 
 import Prelude ()
 import Prelude.Compat
-import Control.Applicative (Applicative)
 import Data.Map (Map)
 import Data.Typeable
 import Graphics.UI.Editor.Basics
@@ -213,7 +212,7 @@ data FrameState delta = FrameState {
 ,   panes           ::  Map PaneName (IDEPane delta)
 ,   paneMap         ::  Map PaneName (PanePath, Connections)
 ,   activePane      ::  (Maybe (PaneName, Connections), [PaneName])
-,   panePathFromNB  ::  ! (Map (Ptr Notebook) PanePath)
+,   panePathFromNB  ::  Map (Ptr Notebook) PanePath
 ,   layout          ::  PaneLayout}
     deriving Show
 

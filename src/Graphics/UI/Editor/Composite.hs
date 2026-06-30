@@ -23,6 +23,7 @@ module Graphics.UI.Editor.Composite (
 ,   disableEditor
 ,   pairEditor
 ,   tupel3Editor
+,   tupel4Editor
 ,   splitEditor
 ,   eitherOrEditor
 ,   multisetEditor
@@ -42,7 +43,7 @@ import Prelude.Compat
 import Control.Monad
 import Data.IORef
 import Data.Maybe
-import Data.Set as S (singleton)
+import Distribution.Compat.NonEmptySet as S (singleton)
 import Data.Text (Text)
 import qualified Data.Text as T (pack, unpack)
 
@@ -98,7 +99,7 @@ import Data.GI.Gtk.ModelView.Types
        (treePathNewFromIndices', equalManagedPtr)
 import GI.Gtk.Structs.TreePath (treePathGetIndices)
 import Distribution.Version
-       (Version, majorBoundVersion,
+       (Version, majorBoundVersion, version0,
         withinVersion, intersectVersionRanges, unionVersionRanges,
         earlierVersion, laterVersion, thisVersion, anyVersion,
         cataVersionRange, normaliseVersionRange, VersionRangeF(..))
@@ -199,6 +200,62 @@ tupel3Editor p1 p2 p3 params notifier = do
                     r3' <- ext3
                     if isJust r1' && isJust r2' && isJust r3'
                         then return (Just (fromJust r1',fromJust r2', fromJust r3'))
+                        else return Nothing)
+        params
+        notifier
+
+tupel4Editor :: (Editor alpha, Parameters)
+    -> (Editor beta, Parameters)
+    -> (Editor gamma, Parameters)
+    -> (Editor delta, Parameters)
+    -> Editor (alpha,beta,gamma,delta)
+tupel4Editor p1 p2 p3 p4 params notifier = do
+    coreRef <- newIORef Nothing
+    noti1   <- emptyNotifier
+    noti2   <- emptyNotifier
+    noti3   <- emptyNotifier
+    noti4   <- emptyNotifier
+    mapM_ (propagateEvent notifier [noti1,noti2,noti3,noti4]) (Clicked : allGUIEvents)
+    r1@(frame1,inj1,_ext1) <- fst p1 (snd p1) noti1
+    r2@(frame2,inj2,_ext2) <- fst p2 (snd p2) noti2
+    r3@(frame3,inj3,_ext3) <- fst p3 (snd p3) noti3
+    r4@(frame4,inj4,_ext4) <- fst p4 (snd p4) noti4
+    mkEditor
+        (\widget (v1,v2,v3,v4) -> do
+            core <- readIORef coreRef
+            case core of
+                Nothing  -> do
+                    grid <- gridNew
+                    orientableSetOrientation grid $ getParameter paraOrientation params
+                    setPrimaryExpand grid frame1 True
+                    containerAdd grid frame1
+                    setPrimaryExpand grid frame2 True
+                    containerAdd grid frame2
+                    setPrimaryExpand grid frame3 True
+                    containerAdd grid frame3
+                    setPrimaryExpand grid frame4 True
+                    containerAdd grid frame4
+                    containerAdd widget grid
+                    inj1 v1
+                    inj2 v2
+                    inj3 v3
+                    inj4 v4
+                    writeIORef coreRef (Just (r1,r2,r3,r4))
+                Just ((_,inj1',_),(_,inj2',_),(_,inj3',_),(_,inj4',_)) -> do
+                    inj1' v1
+                    inj2' v2
+                    inj3' v3
+                    inj4' v4)
+        (do core <- readIORef coreRef
+            case core of
+                Nothing -> return Nothing
+                Just ((_,_,ext1),(_,_,ext2),(_,_,ext3),(_,_,ext4)) -> do
+                    r1' <- ext1
+                    r2' <- ext2
+                    r3' <- ext3
+                    r4' <- ext4
+                    if isJust r1' && isJust r2' && isJust r3' && isJust r4'
+                        then return (Just (fromJust r1',fromJust r2', fromJust r3', fromJust r4'))
                         else return Nothing)
         params
         notifier
@@ -812,13 +869,13 @@ versionRangeEditor para noti = do
             (paraOrientation <<<- ParaOrientation OrientationVertical $ para)
             noti
     let vrinj = inj . snd . cataVersionRange (\case
-                  AnyVersionF              -> (anyVersion, Nothing)
                   (ThisVersionF v)         -> (thisVersion v, Just (Left (ThisVersionS,v)))
                   (LaterVersionF v)        -> (laterVersion v, Just (Left (LaterVersionS,v)))
                   (EarlierVersionF v)      -> (earlierVersion v, Just (Left (EarlierVersionS,v)))
-                  (OrLaterVersionF v)      -> (unionVersionRanges (thisVersion v) (laterVersion v), Just (Left (ThisOrLaterVersionS,v)))
+                  (OrLaterVersionF v)
+                    | v == version0        -> (anyVersion, Nothing)
+                    | otherwise            -> (unionVersionRanges (thisVersion v) (laterVersion v), Just (Left (ThisOrLaterVersionS,v)))
                   (OrEarlierVersionF v)    -> (unionVersionRanges (thisVersion v) (earlierVersion v), Just (Left (ThisOrEarlierVersionS,v)))
-                  (WildcardVersionF v1')   -> (withinVersion v1', Just (Left (WildcardVersionS,v1')))
                   (MajorBoundVersionF v1') -> (majorBoundVersion v1', Just (Left (MajorBoundVersionS,v1')))
                   (UnionVersionRangesF (vr1, _r1) (vr2, _r2))
                                            -> (unionVersionRanges vr1 vr2, Just (Right (UnionVersionRangesS,vr1,vr2)))

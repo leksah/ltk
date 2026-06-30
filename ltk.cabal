@@ -1,8 +1,8 @@
-cabal-version: 1.24
+cabal-version: 3.4
 name: ltk
 version: 0.16.2.0
 build-type: Simple
-license: GPL
+license: GPL-2.0-or-later
 license-file: LICENSE
 copyright: Juergen "jutaro" Nicklisch-Franken
 maintainer: maintainer@leksah.org
@@ -22,9 +22,9 @@ source-repository head
 
 library
 
-    if !impl(ghcjs -any)
+    if !impl(ghcjs)
         build-depends:
-            ghc -any
+            ghc
 
     exposed-modules:
         Control.Event
@@ -39,18 +39,19 @@ library
         Graphics.UI.Frame.ViewFrame
         Graphics.UI.Utils
     build-depends:
-        Cabal >=2 && <3.3,
-        base >=4.0.0.0 && <4.15,
-        base-compat >=0.10.0 && <0.12,
+        Cabal >=3.10 && <3.17,
+        Cabal-syntax >=3.10 && <3.17,
+        base >=4.0.0.0 && <4.20,
+        base-compat >=0.10.0 && <0.13,
         containers >=0.2 && <0.7,
-        data-default >=0.7.1.1 && <0.8,
-        filepath >=1.1.0 && <1.5,
-        text >=0.11.0.6 && <1.3,
-        mtl >=1.1.0.2 && <2.3,
+        data-default >=0.7.1.1 && <0.9,
+        filepath >=1.1.0 && <1.6,
+        text >=0.11.0.6 && <2.2,
+        mtl >=1.1.0.2 && <2.4,
         parsec >=2.1.0.1 && <3.2,
         pretty >=1.0.1.0 && <1.2,
-        transformers >=0.2.2.0 && <0.6,
-        haskell-gi-base >=0.21.2 && <0.26,
+        transformers >=0.2.2.0 && <0.7,
+        haskell-gi-base >=0.21.2 && <0.27,
         gi-glib >=2.0.6 && <2.1,
         gi-gobject >=2.0.6 && <2.1,
         gi-cairo >=1.0.6 && <1.1,
@@ -59,7 +60,7 @@ library
         gi-gtk-hs >=0.3.6.2 && <0.4,
         gi-pango >=1.0.6 && <1.1,
         haskell-gi-overloading ==0.0.*,
-        lens >=4.15.4 && <4.20,
-        aeson >=1.1.2.0 && <1.6
+        lens >=4.15.4 && <5.4,
+        aeson >=1.1.2.0 && <2.3
     hs-source-dirs: src
 

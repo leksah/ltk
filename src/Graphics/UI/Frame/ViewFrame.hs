@@ -572,7 +572,7 @@ viewCollapse' panePath = trace "viewCollapse' called" $ do
                                     -- 2. Remove unused notebook from admin
                                     st <- getFrameState
                                     notebookPtr <- liftIO $ unsafeManagedPtrCastPtr otherSideNotebook
-                                    let ! newMap = Map.delete notebookPtr (panePathFromNB st)
+                                    let newMap = Map.delete notebookPtr (panePathFromNB st)
                                     setPanePathFromNB newMap
                                     -- 3. Remove one level and reparent notebook
                                     parent <- widgetGetParent activeNotebook >>= liftIO . unsafeCastTo Container . fromJust
