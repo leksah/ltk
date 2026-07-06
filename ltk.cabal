@@ -22,6 +22,12 @@ source-repository head
 
 library
 
+    -- The GTK3 widgets have no Windows story (no gtk3 in the mingw
+    -- pkg-config set); leksah's Windows build compiles the sources it
+    -- needs (Control.Event) directly.
+    if os(windows)
+        buildable: False
+
     if !impl(ghcjs)
         build-depends:
             ghc
